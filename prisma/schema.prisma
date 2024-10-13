@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./database.sqlite"
+}
+
+// Define your models here
+// For example:
+model GameInstallation {
+  id             Int       @id @default(autoincrement())
+  externalGameId String
+  externalAppId  String    // Добавлено поле для внешнего ID приложения
+  installPath    String
+  pathAlias      String?
+  lastUpdateDate DateTime?
+  autoUpdate     Boolean   @default(true)
+
+  @@unique([externalGameId, externalAppId]) // Уникальное сочетание gameId и appId
+
+  @@map("game_installation")
+}
+
+model UpdateLog {
+  id         Int      @id @default(autoincrement())
+  externalId String
+  patchId    String
+  gameId     String
+  success    Boolean
+  message    String
+  timestamp  DateTime @default(now())
+
+  @@map("update_log")
+}
+
+model ErrorLog {
+  id         Int      @id @default(autoincrement())
+  gameId     String?
+  errorType  String
+  message    String
+  stackTrace String?
+  timestamp  DateTime @default(now())
+
+  @@map("error_log")
+}
+
+model SteamSettings {
+  id       Int    @id @default(autoincrement())
+  username String
+  password String
+  cmdPath  String
+
+  @@map("steam_settings")
+}
+
+model AppSettings {
+  id                   Int     @id @default(autoincrement())
+  autoUpdateEnabled    Boolean @default(false)
+  updateFrequency      Int     @default(24) // в часах
+  notificationsEnabled Boolean @default(true)
+
+  @@map("app_settings")
+}
