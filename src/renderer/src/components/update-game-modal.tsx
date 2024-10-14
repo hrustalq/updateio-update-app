@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@renderer/components/ui/dialog'
 import { Button } from '@renderer/components/ui/button'
-import { useQuery, useMutation } from '@tanstack/react-query'
-import { settingsApi, updatesApi } from '@renderer/api'
+import { useMutation } from '@tanstack/react-query'
+import $api, { updatesApi } from '@renderer/api'
 import { Loader2 } from 'lucide-react'
 import { toast } from '@renderer/components/ui/toast/use-toast'
 
@@ -21,11 +21,13 @@ export function UpdateGameModal({ isOpen, onClose, gameId, appId }: UpdateGameMo
     isLoading,
     isError,
     error
-  } = useQuery({
-    queryKey: ['settings', gameId, appId],
-    queryFn: () => settingsApi.getSettings({ gameId, appId }),
-    enabled: isOpen,
-    retry: 1
+  } = $api.useQuery('get', '/api/settings', {
+    params: {
+      query: {
+        appId,
+        gameId
+      }
+    }
   })
 
   useEffect(() => {
@@ -79,7 +81,7 @@ export function UpdateGameModal({ isOpen, onClose, gameId, appId }: UpdateGameMo
         {step === 'confirm' && settings && (
           <div className="p-4">
             <p>Вы уверены, что хотите обновить игру?</p>
-            <p>Команда для обновления: {JSON.stringify(settings.updateCommand)}</p>
+            <p>Команда для обновления: {JSON.stringify(settings.data[0].updateCommand)}</p>
             <div className="mt-4 flex justify-end space-x-2">
               <Button variant="outline" onClick={onClose}>
                 Отмена

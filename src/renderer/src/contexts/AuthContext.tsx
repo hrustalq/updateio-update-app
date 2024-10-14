@@ -17,7 +17,7 @@ interface AuthProviderProps {
   children: ReactNode
 }
 
-const REFRESH_INTERVAL = 1000 * 60 * 15 // 14 минут
+const REFRESH_INTERVAL = 1000 * 60 * 10
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const queryClient = useQueryClient()

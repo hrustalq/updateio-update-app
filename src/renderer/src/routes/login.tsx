@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { Card, CardHeader, CardTitle, CardContent } from '@renderer/components/ui/card'
 import { Button } from '@renderer/components/ui/button'
 import { useAuth } from '@renderer/hooks/use-auth'
-import { authApi } from '@renderer/api'
+import $api from '@renderer/api'
 import { QRCodeSVG } from 'qrcode.react'
 import { io, Socket } from 'socket.io-client'
 import { useToast } from '@renderer/components/ui/toast/use-toast'
@@ -18,29 +18,33 @@ export const Login = () => {
   const { redirect }: { redirect?: string } = useSearch({ from: '__root__' })
   const { toast } = useToast()
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate({ to: redirect || '/' })
-    }
-  }, [isAuthenticated, navigate, redirect])
-
-  const generateQrCode = useCallback(async () => {
-    try {
-      const data = await authApi.generateQrCode()
-      setQrCodeData(data)
-      subscribeToQrCodeStatus(data.code)
-    } catch (error) {
-      console.error('Failed to generate QR code:', error)
+  const {
+    mutate: generateQrCode,
+    data,
+    reset,
+    isPending
+  } = $api.useMutation('post', '/api/auth/qr-code/generate', {
+    onSuccess: () => {
+      setQrCodeData(data!)
+      subscribeToQrCodeStatus(data!.code)
+    },
+    onError: () => {
       toast({
         title: 'Error',
         description: 'Failed to generate QR code',
         variant: 'destructive'
       })
     }
-  }, [toast])
+  })
 
   useEffect(() => {
-    generateQrCode()
+    if (isAuthenticated) {
+      navigate({ to: redirect || '/' })
+    }
+  }, [isAuthenticated, navigate, redirect])
+
+  useEffect(() => {
+    generateQrCode({})
     return () => {
       if (socket) {
         socket.disconnect()
@@ -114,7 +118,7 @@ export const Login = () => {
     if (socket) {
       socket.disconnect()
     }
-    generateQrCode()
+    reset()
   }
 
   return (
@@ -125,7 +129,7 @@ export const Login = () => {
         </CardHeader>
         <CardContent className="flex flex-col items-center">
           <div className="p-4">
-            {qrCodeData && socketConnected ? (
+            {qrCodeData && socketConnected && !isPending ? (
               <div className="p-2 bg-white">
                 <QRCodeSVG value={qrCodeData.code} size={256} />
               </div>
