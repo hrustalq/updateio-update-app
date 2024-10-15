@@ -5,6 +5,7 @@ import { Login } from './routes/login'
 import { Settings } from './routes/settings'
 import { queryClient } from './providers/query.provider'
 import { Logout } from './routes/logout'
+import { ErrorLog } from './routes/error-log'
 
 export const rootRoute = createRootRoute({
   component: Root
@@ -34,7 +35,19 @@ export const settingsRoute = createRoute({
   component: Settings
 })
 
-export const routeTree = rootRoute.addChildren([loginRoute, indexRoute, logoutRoute, settingsRoute])
+export const errorLogsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/error-logs',
+  component: ErrorLog
+})
+
+export const routeTree = rootRoute.addChildren([
+  loginRoute,
+  indexRoute,
+  logoutRoute,
+  settingsRoute,
+  errorLogsRoute
+])
 
 export const router = createRouter({
   routeTree,

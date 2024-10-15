@@ -446,6 +446,58 @@ export interface paths {
         patch: operations["SettingsController_updateSettings"];
         trace?: never;
     };
+    "/api/updates/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Запрос на обновление */
+        post: operations["UpdatesController_requestUpdate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/updates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Получить запрос на обновление по ID */
+        get: operations["UpdatesController_getUpdateRequest"];
+        put?: never;
+        post?: never;
+        /** Удалить запрос на обновление */
+        delete: operations["UpdatesController_deleteUpdateRequest"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/updates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Получить список запросов на обновление */
+        get: operations["UpdatesController_getUpdateRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -558,6 +610,13 @@ export interface components {
             /**
              * @description Код авторизации
              * @example 123e4567-e89b-12d3-a456-426614174000
+             */
+            code: string;
+        };
+        LoginWithCodeDto: {
+            /**
+             * @description Код для авторизации
+             * @example d067dddc-b645-4154-b571-c22a9dcf26af
              */
             code: string;
         };
@@ -1216,6 +1275,61 @@ export interface components {
             /** @description Команда для вызова обновления */
             updateCommand?: string;
         };
+        CreateUpdateRequestDto: {
+            /** @description ID игры */
+            gameId: string;
+            /** @description ID приложения */
+            appId: string;
+        };
+        UpdateRequest: {
+            /** @description Уникальный идентификатор запроса на обновление */
+            id: string;
+            /**
+             * @description Статус запроса на обновление
+             * @enum {string}
+             */
+            status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+            /** @description ID игры */
+            gameId: string;
+            /** @description ID приложения */
+            appId: string;
+            /** @description ID пользователя, создавшего запрос */
+            userId: string;
+            /**
+             * Format: date-time
+             * @description Дата и время создания запроса
+             */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description Дата и время последнего обновления запроса
+             */
+            updatedAt: string;
+        };
+        GetUpdateRequestsResponseDto: {
+            /** @description Список игр */
+            data: components["schemas"]["UpdateRequest"][];
+            /**
+             * @description Текущий номер страницы
+             * @example 1
+             */
+            page: number;
+            /**
+             * @description Количество записей для одной страницы
+             * @example 10
+             */
+            perPage: number;
+            /**
+             * @description Общее количество записей
+             * @example 100
+             */
+            total: number;
+            /**
+             * @description Общее количество страниц
+             * @example 10
+             */
+            pageCount: number;
+        };
         UnauthorizedResponseDto: {
             /** @example 401 */
             statusCode: number;
@@ -1783,10 +1897,15 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        /** @description Данные для авторизации по qr колу */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginWithCodeDto"];
+            };
+        };
         responses: {
             /** @description Успешная авторизация по QR-коду */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3582,6 +3701,243 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    UpdatesController_requestUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateUpdateRequestDto"];
+            };
+        };
+        responses: {
+            /** @description Запрос на обновление успешно создан */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateRequest"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BadRequestResponseDto"];
+                };
+            };
+            /** @description Недостаточно прав для создания запроса на обновление */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForbiddenResponseDto"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotFoundResponseDto"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalServerErrorResponseDto"];
+                };
+            };
+        };
+    };
+    UpdatesController_getUpdateRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID запроса на обновление */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Запрос на обновление успешно получен */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateRequest"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BadRequestResponseDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForbiddenResponseDto"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotFoundResponseDto"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalServerErrorResponseDto"];
+                };
+            };
+        };
+    };
+    UpdatesController_deleteUpdateRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID запроса на обновление */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Запрос на обновление успешно удален */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BadRequestResponseDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForbiddenResponseDto"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotFoundResponseDto"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalServerErrorResponseDto"];
+                };
+            };
+        };
+    };
+    UpdatesController_getUpdateRequests: {
+        parameters: {
+            query?: {
+                /** @description Номер страницы, начиная с 1 */
+                page?: number;
+                /** @description Количество элементов на странице */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Список запросов на обновление успешно получен */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetUpdateRequestsResponseDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BadRequestResponseDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForbiddenResponseDto"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotFoundResponseDto"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalServerErrorResponseDto"];
+                };
             };
         };
     };

@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, ReactElement } from 'react'
-import { useInfiniteQuery, useMutation } from '@tanstack/react-query'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence, Variants } from 'framer-motion'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@renderer/components/ui/dialog'
 import { Button } from '@renderer/components/ui/button'
@@ -19,9 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle
 } from '@renderer/components/ui/alert-dialog'
-import { appsApi, gamesApi, subscriptionsApi } from '@renderer/api'
-
-const ITEMS_PER_PAGE = 20
+import $api from '@renderer/lib/api'
 
 interface Item {
   id: string
@@ -40,32 +37,6 @@ interface ItemListProps {
   selectedId?: string
   isLoading: boolean
   emptyMessage: string
-}
-
-interface StepProps {
-  direction: number
-  isOpen?: boolean
-}
-
-interface SelectStepProps extends StepProps {
-  items: Item[]
-  selectedItem?: string
-  setSelectedItem: (id: string) => void
-  fetchNextPage: () => void
-  hasNextPage: boolean
-  isFetchingNextPage: boolean
-  title: string
-  placeholder: string
-  emptyMessage: string
-  isLoading: boolean
-}
-
-interface ConfirmationStepProps extends StepProps {
-  apps: Item[]
-  games: Item[]
-  selectedApp?: string
-  selectedGame?: string
-  error?: ApiError
 }
 
 interface ApiError {
@@ -135,131 +106,252 @@ const ItemList: React.FC<ItemListProps> = React.memo(
 
 ItemList.displayName = 'ItemList'
 
-const SelectStep: React.FC<SelectStepProps> = ({
-  items,
-  selectedItem,
-  setSelectedItem,
-  fetchNextPage,
-  hasNextPage,
-  isFetchingNextPage,
-  direction,
-  title,
-  placeholder,
-  emptyMessage,
-  isLoading
-}) => (
-  <motion.div
-    key={title}
-    custom={direction}
-    variants={slideVariants}
-    initial="enter"
-    animate="center"
-    exit="exit"
-    transition={{
-      x: { type: 'spring', stiffness: 400, damping: 30 },
-      opacity: { duration: 0.15 }
-    }}
-    className="flex flex-col h-full"
-  >
-    <DialogHeader>
-      <DialogTitle>{title}</DialogTitle>
-    </DialogHeader>
-    <div className="mt-4 flex-grow overflow-y-auto">
-      <Combobox
-        options={items.map((item) => ({ value: item.id, label: item.name }))}
-        placeholder={placeholder}
-        emptyMessage={emptyMessage}
-        value={selectedItem || ''}
-        onChange={(value) => setSelectedItem(value)}
-      />
-      <ItemList
-        items={items}
-        onSelect={setSelectedItem}
-        selectedId={selectedItem}
-        isLoading={isLoading}
-        emptyMessage={emptyMessage}
-      />
-      {hasNextPage && (
-        <Button
-          onClick={() => fetchNextPage()}
-          disabled={isFetchingNextPage}
-          className="mt-4 w-full"
-        >
-          {isFetchingNextPage ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Загрузка...
-            </>
-          ) : (
-            'Загрузить еще'
-          )}
-        </Button>
-      )}
-    </div>
-  </motion.div>
-)
+const ITEMS_PER_PAGE = 10
 
-const ConfirmationStep: React.FC<ConfirmationStepProps> = ({
-  apps,
-  games,
-  selectedApp,
-  selectedGame,
-  direction,
-  error
-}) => (
-  <motion.div
-    key="confirmation"
-    custom={direction}
-    variants={slideVariants}
-    initial="enter"
-    animate="center"
-    exit="exit"
-    transition={{
-      x: { type: 'spring', stiffness: 400, damping: 30 },
-      opacity: { duration: 0.15 }
-    }}
-    className="flex flex-col h-full"
-  >
-    <DialogHeader>
-      <DialogTitle>Подтверждение подписки</DialogTitle>
-    </DialogHeader>
-    <div className="mt-4 flex-grow overflow-y-auto flex flex-col items-center justify-center">
-      <div className="text-center mb-6">
-        <p className="text-lg font-semibold mb-2">Вы уверены, что хотите добавить эту подписку?</p>
-        <p className="text-sm text-gray-500">Подтвердите выбранные приложение и игру</p>
+const SubscriptionContext = React.createContext<{
+  step: number
+  direction: number
+  selectedApp?: string
+  selectedGame?: string
+  setSelectedApp: (id: string) => void
+  setSelectedGame: (id: string) => void
+  error?: ApiError
+  handleNext: () => void
+  handlePrevious: () => void
+} | null>(null)
+
+const useSubscriptionContext = () => {
+  const context = React.useContext(SubscriptionContext)
+  if (!context) {
+    throw new Error('useSubscriptionContext must be used within a SubscriptionProvider')
+  }
+  return context
+}
+
+const SelectAppStep: React.FC = () => {
+  const { direction, setSelectedApp } = useSubscriptionContext()
+  const [page, setPage] = useState(1)
+  const [selectedItem, setSelectedItem] = useState<string | undefined>(undefined)
+
+  const { data, isLoading, isFetching } = $api.useQuery('get', '/api/apps', {
+    queryKey: ['apps', page],
+    params: { query: { page, limit: ITEMS_PER_PAGE } }
+  })
+
+  const items = data?.data || []
+  const totalPages = Math.ceil((data?.total || 0) / ITEMS_PER_PAGE)
+
+  const handleSelect = useCallback(
+    (id: string) => {
+      setSelectedItem(id)
+      setSelectedApp(id)
+    },
+    [setSelectedApp]
+  )
+
+  const handleScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      const { scrollTop, scrollHeight, clientHeight } = event.currentTarget
+      if (scrollHeight - scrollTop <= clientHeight * 1.5 && page < totalPages && !isFetching) {
+        setPage((prevPage) => prevPage + 1)
+      }
+    },
+    [page, totalPages, isFetching]
+  )
+
+  return (
+    <motion.div
+      key="app-selection"
+      custom={direction}
+      variants={slideVariants}
+      initial="enter"
+      animate="center"
+      exit="exit"
+      transition={{
+        x: { type: 'spring', stiffness: 400, damping: 30 },
+        opacity: { duration: 0.15 }
+      }}
+      className="flex flex-col h-full"
+    >
+      <DialogHeader>
+        <DialogTitle>Выберите приложение</DialogTitle>
+      </DialogHeader>
+      <div className="mt-4 flex-grow overflow-y-auto" onScroll={handleScroll}>
+        <Combobox
+          options={items.map((item) => ({ value: item.id, label: item.name }))}
+          placeholder="Поиск приложения"
+          emptyMessage="Приложения не найдены"
+          value={selectedItem || ''}
+          onChange={handleSelect}
+        />
+        <ItemList
+          items={items}
+          onSelect={handleSelect}
+          selectedId={selectedItem}
+          isLoading={isLoading}
+          emptyMessage="Приложения не найдены"
+        />
+        {isFetching && (
+          <div className="flex justify-center items-center p-4">
+            <Loader2 className="h-6 w-6 animate-spin" />
+          </div>
+        )}
       </div>
-      <div className="flex space-x-8 mb-6">
-        {[
-          { items: apps, selected: selectedApp, type: 'Приложение' },
-          { items: games, selected: selectedGame, type: 'Игра' }
-        ].map(({ items, selected, type }) => (
-          <Card key={type} className="w-48">
-            <CardContent className="p-4 flex flex-col items-center">
-              <img
-                src={
-                  items.find((item) => item.id === selected)?.image ||
-                  `/placeholder-${type.toLowerCase()}.jpg`
-                }
-                alt={items.find((item) => item.id === selected)?.name}
-                className="w-24 h-24 object-cover rounded-full mb-4"
-              />
-              <h3 className="font-semibold text-center">
-                {items.find((item) => item.id === selected)?.name}
-              </h3>
-              <p className="text-sm text-gray-500">{type}</p>
-            </CardContent>
-          </Card>
-        ))}
+    </motion.div>
+  )
+}
+
+const SelectGameStep: React.FC = () => {
+  const { direction, selectedApp, setSelectedGame } = useSubscriptionContext()
+  const [page, setPage] = useState(1)
+  const [selectedItem, setSelectedItem] = useState<string | undefined>(undefined)
+
+  const { data, isLoading, isFetching } = $api.useQuery('get', '/api/games', {
+    queryKey: ['games', selectedApp, page],
+    params: { query: { page, limit: ITEMS_PER_PAGE, appId: selectedApp } },
+    enabled: !!selectedApp
+  })
+
+  const items = data?.data || []
+  const totalPages = Math.ceil((data?.total || 0) / ITEMS_PER_PAGE)
+
+  const handleSelect = useCallback(
+    (id: string) => {
+      setSelectedItem(id)
+      setSelectedGame(id)
+    },
+    [setSelectedGame]
+  )
+
+  const handleScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      const { scrollTop, scrollHeight, clientHeight } = event.currentTarget
+      if (scrollHeight - scrollTop <= clientHeight * 1.5 && page < totalPages && !isFetching) {
+        setPage((prevPage) => prevPage + 1)
+      }
+    },
+    [page, totalPages, isFetching]
+  )
+
+  return (
+    <motion.div
+      key="game-selection"
+      custom={direction}
+      variants={slideVariants}
+      initial="enter"
+      animate="center"
+      exit="exit"
+      transition={{
+        x: { type: 'spring', stiffness: 400, damping: 30 },
+        opacity: { duration: 0.15 }
+      }}
+      className="flex flex-col h-full"
+    >
+      <DialogHeader>
+        <DialogTitle>Выберите игру</DialogTitle>
+      </DialogHeader>
+      <div className="mt-4 flex-grow overflow-y-auto" onScroll={handleScroll}>
+        <Combobox
+          options={items.map((item) => ({ value: item.id, label: item.name }))}
+          placeholder="Поиск игры"
+          emptyMessage="Игры не найдены"
+          value={selectedItem || ''}
+          onChange={handleSelect}
+        />
+        <ItemList
+          items={items}
+          onSelect={handleSelect}
+          selectedId={selectedItem}
+          isLoading={isLoading}
+          emptyMessage="Игры не найдены"
+        />
+        {isFetching && (
+          <div className="flex justify-center items-center p-4">
+            <Loader2 className="h-6 w-6 animate-spin" />
+          </div>
+        )}
       </div>
-      {error && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertTitle>Ошибка</AlertTitle>
-          <AlertDescription>{error.message}</AlertDescription>
-        </Alert>
-      )}
-    </div>
-  </motion.div>
-)
+    </motion.div>
+  )
+}
+
+const ConfirmationStep: React.FC = () => {
+  const { selectedApp, selectedGame, direction, error } = useSubscriptionContext()
+
+  const { data: app } = $api.useQuery(
+    'get',
+    '/api/apps/{id}',
+    {
+      queryKey: ['app', selectedApp],
+      params: { path: { id: selectedApp! } }
+    },
+    {
+      enabled: !!selectedApp
+    }
+  )
+
+  const { data: game } = $api.useQuery(
+    'get',
+    '/api/games/{id}',
+    {
+      params: { path: { id: selectedGame! } },
+      queryKey: ['game', selectedGame]
+    },
+    { enabled: !!selectedGame }
+  )
+
+  return (
+    <motion.div
+      key="confirmation"
+      custom={direction}
+      variants={slideVariants}
+      initial="enter"
+      animate="center"
+      exit="exit"
+      transition={{
+        x: { type: 'spring', stiffness: 400, damping: 30 },
+        opacity: { duration: 0.15 }
+      }}
+      className="flex flex-col h-full"
+    >
+      <DialogHeader>
+        <DialogTitle>Подтверждение подписки</DialogTitle>
+      </DialogHeader>
+      <div className="mt-4 flex-grow overflow-y-auto flex flex-col items-center justify-center">
+        <div className="text-center mb-6">
+          <p className="text-lg font-semibold mb-2">
+            Вы уверены, что хотите добавить эту подписку?
+          </p>
+          <p className="text-sm text-gray-500">Подтвердите выбранные приложение и игру</p>
+        </div>
+        <div className="flex space-x-8 mb-6">
+          {[
+            { item: app, type: 'Приложение' },
+            { item: game, type: 'Игра' }
+          ].map(({ item, type }) => (
+            <Card key={type} className="w-48">
+              <CardContent className="p-4 flex flex-col items-center">
+                <img
+                  src={item?.image || `/placeholder-${type.toLowerCase()}.jpg`}
+                  alt={item?.name}
+                  className="w-24 h-24 object-cover rounded-full mb-4"
+                />
+                <h3 className="font-semibold text-center">{item?.name}</h3>
+                <p className="text-sm text-gray-500">{type}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        {error && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertTitle>Ошибка</AlertTitle>
+            <AlertDescription>{error.message}</AlertDescription>
+          </Alert>
+        )}
+      </div>
+    </motion.div>
+  )
+}
 
 export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, onClose }) => {
   const [step, setStep] = useState(0)
@@ -271,45 +363,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, on
   const [error, setError] = useState<ApiError>()
   const { toast } = useToast()
 
-  const {
-    data: appsData,
-    fetchNextPage: fetchNextAppsPage,
-    hasNextPage: hasNextAppsPage,
-    isFetchingNextPage: isFetchingNextAppsPage,
-    isLoading: isLoadingApps
-  } = useInfiniteQuery({
-    queryKey: ['apps'],
-    queryFn: ({ pageParam }) => appsApi.getApps(pageParam),
-    initialPageParam: { page: 1, perPage: ITEMS_PER_PAGE },
-    getNextPageParam: (lastPage) =>
-      lastPage.page < lastPage.totalPages
-        ? { page: lastPage.page + 1, perPage: ITEMS_PER_PAGE }
-        : undefined
-  })
-
-  const {
-    data: gamesData,
-    fetchNextPage: fetchNextGamesPage,
-    hasNextPage: hasNextGamesPage,
-    isFetchingNextPage: isFetchingNextGamesPage,
-    isLoading: isLoadingGames
-  } = useInfiniteQuery({
-    queryKey: ['games', selectedApp],
-    queryFn: ({ pageParam }) => gamesApi.getGames({ ...pageParam, appId: selectedApp }),
-    initialPageParam: { page: 1, perPage: ITEMS_PER_PAGE },
-    getNextPageParam: (lastPage) =>
-      lastPage.page < lastPage.totalPages
-        ? { page: lastPage.page + 1, perPage: ITEMS_PER_PAGE }
-        : undefined,
-    enabled: !!selectedApp // Запрос будет выполнен только когда выбрано приложение
-  })
-
-  const apps = appsData?.pages.flatMap((page) => page.data) || []
-  const games = gamesData?.pages.flatMap((page) => page.data) || []
-
-  const createSubscriptionMutation = useMutation({
-    mutationFn: (params: { appId: string; gameId: string }) =>
-      subscriptionsApi.createSubscription(params),
+  const createSubscriptionMutation = $api.useMutation('post', '/api/subscriptions', {
     onSuccess: () => {
       toast({ title: 'Успех', description: 'Подписка успешно добавлена' })
       completeClose()
@@ -334,7 +388,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, on
   })
 
   const handleNext = useCallback(() => {
-    setError(undefined) // Сбрасываем ошибку при переходе вперед
+    setError(undefined)
     if (step === 0 && !selectedApp) {
       toast({
         title: 'Ошибка',
@@ -351,12 +405,14 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, on
       setDirection(1)
       setStep((prevStep) => prevStep + 1)
     } else if (selectedApp && selectedGame) {
-      createSubscriptionMutation.mutate({ appId: selectedApp, gameId: selectedGame })
+      createSubscriptionMutation.mutate({
+        body: { appId: selectedApp, gameId: selectedGame, isSubscribed: true }
+      })
     }
   }, [step, selectedApp, selectedGame, toast, createSubscriptionMutation])
 
   const handlePrevious = useCallback(() => {
-    setError(undefined) // Сбрасываем ошибку при переходе назад
+    setError(undefined)
     if (step > 0) {
       setDirection(-1)
       setStep((prevStep) => prevStep - 1)
@@ -368,7 +424,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, on
     setSelectedApp(undefined)
     setSelectedGame(undefined)
     setDirection(0)
-    setError(undefined) // Сбрасываем ошибку при сбросе состояния модального окна
+    setError(undefined)
   }, [])
 
   const handleClose = useCallback(() => {
@@ -401,80 +457,33 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, on
     }
   }, [isOpen, resetModalState])
 
-  const renderStep = useMemo((): ReactElement => {
+  const renderStep = useMemo((): React.ReactElement => {
     switch (step) {
       case 0:
-        return (
-          <SelectStep
-            key="app-selection"
-            items={apps}
-            selectedItem={selectedApp}
-            setSelectedItem={setSelectedApp}
-            fetchNextPage={fetchNextAppsPage}
-            hasNextPage={hasNextAppsPage}
-            isFetchingNextPage={isFetchingNextAppsPage}
-            direction={direction}
-            isOpen={isOpen}
-            title="Выберите приложение"
-            placeholder="Поиск приложения"
-            emptyMessage="Приложения не найдены"
-            isLoading={isLoadingApps}
-          />
-        )
+        return <SelectAppStep key="app-selection" />
       case 1:
-        return (
-          <SelectStep
-            key="game-selection"
-            items={games}
-            selectedItem={selectedGame}
-            setSelectedItem={setSelectedGame}
-            fetchNextPage={fetchNextGamesPage}
-            hasNextPage={hasNextGamesPage}
-            isFetchingNextPage={isFetchingNextGamesPage}
-            direction={direction}
-            isOpen={isOpen}
-            title="Выберит игру"
-            placeholder="Поиск игры"
-            emptyMessage="Игры не найдены"
-            isLoading={isLoadingGames}
-          />
-        )
+        return <SelectGameStep key="game-selection" />
       case 2:
-        return (
-          <ConfirmationStep
-            key="confirmation"
-            apps={apps}
-            games={games}
-            selectedApp={selectedApp}
-            selectedGame={selectedGame}
-            direction={direction}
-            error={error}
-          />
-        )
+        return <ConfirmationStep key="confirmation" />
       default:
         return <div key="unknown">Неизвестный шаг</div>
     }
-  }, [
-    step,
-    apps,
-    games,
-    selectedApp,
-    selectedGame,
-    direction,
-    isOpen,
-    fetchNextAppsPage,
-    hasNextAppsPage,
-    isFetchingNextAppsPage,
-    fetchNextGamesPage,
-    hasNextGamesPage,
-    isFetchingNextGamesPage,
-    isLoadingApps,
-    isLoadingGames,
-    error
-  ])
+  }, [step])
 
   return (
-    <>
+    <SubscriptionContext.Provider
+      value={{
+        step,
+        direction,
+        selectedApp,
+        selectedGame,
+        setSelectedApp,
+        setSelectedGame,
+        error,
+        handleNext,
+        handlePrevious
+      }}
+    >
       <Dialog open={internalIsOpen} onOpenChange={handleClose}>
         <DialogContent className="sm:max-w-[700px] h-[600px] flex flex-col">
           <div className="flex-grow overflow-y-auto">
@@ -524,6 +533,6 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, on
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
+    </SubscriptionContext.Provider>
   )
 }

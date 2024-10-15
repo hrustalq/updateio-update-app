@@ -13,25 +13,37 @@ datasource db {
 model GameInstallation {
   id             Int       @id @default(autoincrement())
   externalGameId String
-  externalAppId  String    // Добавлено поле для внешнего ID приложения
+  externalAppId  String
   installPath    String
   pathAlias      String?
   lastUpdateDate DateTime?
+  updateCommand  String
+  fallbackUpdateCommand String
   autoUpdate     Boolean   @default(true)
 
-  @@unique([externalGameId, externalAppId]) // Уникальное сочетание gameId и appId
-
+  @@unique([externalGameId, externalAppId])
   @@map("game_installation")
 }
 
+model UpdateRequest {
+  id        String   @id @default(cuid())
+  status    String   @default("PENDING")
+  gameId    String  
+  appId     String
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  logs      UpdateLog[]
+
+  @@map("update_requests")
+}
+
 model UpdateLog {
-  id         Int      @id @default(autoincrement())
-  externalId String
-  patchId    String
-  gameId     String
-  success    Boolean
-  message    String
-  timestamp  DateTime @default(now())
+  id              Int      @id @default(autoincrement())
+  updateRequestId String
+  message         String
+  timestamp       DateTime @default(now())
+  updateRequest   UpdateRequest @relation(fields: [updateRequestId], references: [id])
 
   @@map("update_log")
 }
@@ -59,8 +71,9 @@ model SteamSettings {
 model AppSettings {
   id                   Int     @id @default(autoincrement())
   autoUpdateEnabled    Boolean @default(false)
-  updateFrequency      Int     @default(24) // в часах
+  updateFrequency      Int     @default(24)
   notificationsEnabled Boolean @default(true)
+  userId               String  @unique
 
   @@map("app_settings")
 }

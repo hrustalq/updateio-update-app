@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useForm } from 'react-hook-form'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Input } from '@renderer/components/ui/input'
@@ -6,7 +6,7 @@ import { Button } from '@renderer/components/ui/button'
 import { Label } from '@renderer/components/ui/label'
 import { useToast } from '@renderer/components/ui/toast/use-toast'
 import { Skeleton } from '@renderer/components/ui/skeleton'
-import { steamSettingsApi } from '@renderer/api'
+import { useElectron } from '@renderer/providers/ElectronProvider'
 
 interface SteamSettingsForm {
   username: string
@@ -19,6 +19,8 @@ export function SteamSettings() {
   const queryClient = useQueryClient()
   const [isValidating, setIsValidating] = useState(false)
 
+  const { invoke } = useElectron()
+
   const {
     register,
     handleSubmit,
@@ -26,26 +28,29 @@ export function SteamSettings() {
     formState: { errors }
   } = useForm<SteamSettingsForm>()
 
-  const { data: steamSettings, isLoading } = useQuery({
+  const { data: settings, isLoading } = useQuery({
     queryKey: ['steamSettings'],
-    queryFn: steamSettingsApi.getSteamSettings
+    queryFn: async () => {
+      return await invoke<SteamSettingsForm>('steam:getSettings')
+    }
   })
 
   useEffect(() => {
-    if (steamSettings) {
-      setValue('username', steamSettings.username)
-      setValue('password', steamSettings.password)
-      setValue('cmdPath', steamSettings.cmdPath)
-    }
-  }, [steamSettings, setValue])
+    setValue('username', settings?.username || '')
+    setValue('password', settings?.password || '')
+    setValue('cmdPath', settings?.cmdPath || '')
+  }, [settings])
 
   const updateMutation = useMutation({
-    mutationFn: steamSettingsApi.updateSteamSettings,
+    mutationFn: async (data: SteamSettingsForm) => {
+      return await invoke('steam:updateSettings', data)
+    },
     onSuccess: () => {
       toast({ title: 'Успех', description: 'Настройки Steam успешно обновлены' })
       queryClient.invalidateQueries({ queryKey: ['steamSettings'] })
     },
-    onError: () => {
+    onError: (error) => {
+      console.error(error)
       toast({
         title: 'Ошибка',
         description: 'Не удалось обновить настройки Steam',
@@ -54,10 +59,14 @@ export function SteamSettings() {
     }
   })
 
+  const validateCmd = useCallback(async (path: string) => {
+    return await invoke('steam:validateSteamCmd', path)
+  }, [])
+
   const onSubmit = async (data: SteamSettingsForm) => {
     setIsValidating(true)
     try {
-      const isValid = await steamSettingsApi.validateSteamCmd(data.cmdPath)
+      const isValid = await validateCmd(data.cmdPath)
       if (isValid) {
         updateMutation.mutate(data)
       } else {

@@ -7,7 +7,7 @@ export function Logout() {
   const navigate = useNavigate()
   const handleLogout = useCallback(async () => {
     try {
-      await logout()
+      await logout({})
       navigate({ to: '/login' })
     } catch (error) {
       console.error(error)

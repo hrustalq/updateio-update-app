@@ -1,12 +1,11 @@
 import { H2 } from '@renderer/components/ui/typography'
-import { useInfiniteQuery } from '@tanstack/react-query'
-import { subscriptionsApi } from '@renderer/api'
+import $api from '@renderer/lib/api'
 import { Card, CardHeader, CardContent, CardFooter } from '@renderer/components/ui/card'
 import { Button } from '@renderer/components/ui/button'
 import { Link } from '@tanstack/react-router'
 import { Badge } from '@renderer/components/ui/badge'
 import { Skeleton } from '@renderer/components/ui/skeleton'
-import { PlusCircle, FileText, History, Trash, Settings, RefreshCw } from 'lucide-react'
+import { PlusCircle, FileText, History, Trash, RefreshCw } from 'lucide-react'
 import {
   Tooltip,
   TooltipContent,
@@ -15,28 +14,27 @@ import {
 } from '@renderer/components/ui/tooltip'
 import { SubscriptionModal } from '@renderer/components/subscription-modal'
 import { useState } from 'react'
-import { GameSettingsModal } from '@renderer/components/game-settings-modal'
 import { UpdateGameModal } from '@renderer/components/update-game-modal'
 
 export function Index() {
   const [subscriptionModalIsOpen, setSubscriptionModalIsOpen] = useState(false)
-  const [gameSettingsModalIsOpen, setGameSettingsModalIsOpen] = useState(false)
-  const [selectedGame, setSelectedGame] = useState({ gameId: '', appId: '' })
   const [updateModalIsOpen, setUpdateModalIsOpen] = useState(false)
   const [selectedGameForUpdate, setSelectedGameForUpdate] = useState({ gameId: '', appId: '' })
 
-  const { fetchNextPage, hasNextPage, isFetchingNextPage, status, isLoading, data } =
-    useInfiniteQuery({
-      queryKey: ['subscriptions'],
-      queryFn: ({ pageParam }) => subscriptionsApi.getSubscriptions(pageParam),
-      initialPageParam: { page: 1, perPage: 12 },
-      getNextPageParam: (lastPage) => {
-        if (lastPage.page < lastPage.totalPages) {
-          return { page: lastPage.page + 1, perPage: 12 }
-        }
-        return
+  const [page, setPage] = useState(1)
+
+  const {
+    status,
+    isLoading,
+    data: subscriptions
+  } = $api.useQuery('get', '/api/subscriptions', {
+    queryKey: ['subscriptions'],
+    params: {
+      query: {
+        page
       }
-    })
+    }
+  })
 
   if (isLoading) return <SubscriptionsSkeleton />
   if (status === 'error')
@@ -46,16 +44,7 @@ export function Index() {
     setSubscriptionModalIsOpen(false)
   }
 
-  const handleOpenGameSettings = (gameId: string, appId: string) => {
-    setSelectedGame({ gameId, appId })
-    setGameSettingsModalIsOpen(true)
-  }
-
-  const handleCloseGameSettings = () => {
-    setGameSettingsModalIsOpen(false)
-  }
-
-  const handleOpenUpdateModal = (gameId: string, appId: string) => {
+  const handleOpenUpdateModal = ({ gameId, appId }: { gameId: string; appId: string }) => {
     setSelectedGameForUpdate({ gameId, appId })
     setUpdateModalIsOpen(true)
   }
@@ -74,140 +63,116 @@ export function Index() {
           </Button>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-          {data?.pages.flatMap((page) =>
-            page.data.map((subscription) => (
-              <Card
-                key={subscription.id}
-                className="flex flex-col overflow-hidden hover:shadow-lg transition-shadow duration-300"
-              >
-                <CardHeader className="p-0">
-                  <div className="relative h-48 w-full">
-                    <img
-                      src={subscription.game.image || '/placeholder-game.jpg'}
-                      alt={subscription.game.name}
-                      className="w-full h-full object-cover"
-                    />
-                    <Badge
-                      className={`absolute top-2 text-white right-2 ${
-                        subscription.isSubscribed ? 'bg-green-500' : 'bg-red-500'
-                      }`}
-                    >
-                      {subscription.isSubscribed ? 'Активна' : 'Неактивна'}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="flex-grow p-4">
-                  <h3 className="text-lg font-semibold mb-2">{subscription.game.name}</h3>
-                  <div className="flex items-center mb-2">
-                    <img
-                      src={subscription.app.image || '/placeholder-app.jpg'}
-                      alt={subscription.app.name}
-                      className="w-6 h-6 rounded mr-2"
-                    />
-                    <span className="text-sm text-gray-600">{subscription.app.name}</span>
-                  </div>
-                </CardContent>
-                <CardFooter className="p-2 border-t flex justify-between items-center">
-                  <div className="flex space-x-2">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="sm" className="p-1" asChild>
-                          <Link className="px-2 py-1" to={`/news/${subscription.game.id}`}>
-                            <FileText className="h-4 w-4" />
-                          </Link>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Новости</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="sm" className="p-1 " asChild>
-                          <Link className="px-2 py-1" to={`/updates/${subscription.game.id}`}>
-                            <History className="h-4 w-4" />
-                          </Link>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>История обновлений</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="px-2 py-1 text-xs"
-                          onClick={() => {
-                            // Здесь будет логика отписки
-                            console.log(`Отписаться от ${subscription.game.name}`)
-                          }}
-                        >
-                          <Trash className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Отписаться от обновлений</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="p-1"
-                          onClick={() =>
-                            handleOpenGameSettings(subscription.game.id, subscription.app.id)
-                          }
-                        >
-                          <Settings className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Настройки игры</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="p-1"
-                          onClick={() =>
-                            handleOpenUpdateModal(subscription.game.id, subscription.app.id)
-                          }
-                        >
-                          <RefreshCw className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Обновить игру</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
-                </CardFooter>
-              </Card>
-            ))
-          )}
+          {subscriptions?.data.flatMap((subscription) => (
+            <Card
+              key={subscription.id}
+              className="flex flex-col overflow-hidden hover:shadow-lg transition-shadow duration-300"
+            >
+              <CardHeader className="p-0">
+                <div className="relative h-48 w-full">
+                  <img
+                    src={subscription.game.image || '/placeholder-game.jpg'}
+                    alt={subscription.game.name}
+                    className="w-full h-full object-cover"
+                  />
+                  <Badge
+                    className={`absolute top-2 text-white right-2 ${
+                      subscription.isSubscribed ? 'bg-green-500' : 'bg-red-500'
+                    }`}
+                  >
+                    {subscription.isSubscribed ? 'Активна' : 'Неактивна'}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="flex-grow p-4">
+                <h3 className="text-lg font-semibold mb-2">{subscription.game.name}</h3>
+                <div className="flex items-center mb-2">
+                  <img
+                    src={subscription.app.image || '/placeholder-app.jpg'}
+                    alt={subscription.app.name}
+                    className="w-6 h-6 rounded mr-2"
+                  />
+                  <span className="text-sm text-gray-600">{subscription.app.name}</span>
+                </div>
+              </CardContent>
+              <CardFooter className="p-2 border-t flex justify-between items-center">
+                <div className="flex space-x-2">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="sm" className="p-1" asChild>
+                        <Link className="px-2 py-1" to={`/news/${subscription.game.id}`}>
+                          <FileText className="h-4 w-4" />
+                        </Link>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Новости</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="sm" className="p-1 " asChild>
+                        <Link className="px-2 py-1" to={`/updates/${subscription.game.id}`}>
+                          <History className="h-4 w-4" />
+                        </Link>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>История обновлений</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="px-2 py-1 text-xs"
+                        onClick={() => {
+                          // Здесь будет логика отписки
+                          console.log(`Отписаться от ${subscription.game.name}`)
+                        }}
+                      >
+                        <Trash className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Отписаться от обновлений</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="p-1"
+                        onClick={() =>
+                          handleOpenUpdateModal({
+                            gameId: subscription.game.id,
+                            appId: subscription.app.id
+                          })
+                        }
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Обновить игру</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </CardFooter>
+            </Card>
+          ))}
         </div>
-        {hasNextPage && (
-          <Button
-            onClick={() => fetchNextPage()}
-            disabled={isFetchingNextPage}
-            className="mt-8 block"
-          >
-            {isFetchingNextPage ? 'Загрузка...' : 'Загрузить еще'}
-          </Button>
-        )}
+        <Button
+          onClick={() => setPage((prev) => prev + 1)}
+          disabled={page === subscriptions?.pageCount}
+          className="mt-8 block"
+        >
+          Загрузить еще
+        </Button>
       </div>
       <SubscriptionModal isOpen={subscriptionModalIsOpen} onClose={handleCloseSubscriptionModal} />
-      <GameSettingsModal
-        isOpen={gameSettingsModalIsOpen}
-        onClose={handleCloseGameSettings}
-        gameId={selectedGame.gameId}
-        appId={selectedGame.appId}
-      />
       <UpdateGameModal
         isOpen={updateModalIsOpen}
         onClose={handleCloseUpdateModal}

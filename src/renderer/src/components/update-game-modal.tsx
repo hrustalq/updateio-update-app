@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@renderer/components/ui/dialog'
 import { Button } from '@renderer/components/ui/button'
-import { useMutation } from '@tanstack/react-query'
-import $api, { updatesApi } from '@renderer/api'
+import $api from '@renderer/lib/api'
 import { Loader2 } from 'lucide-react'
 import { toast } from '@renderer/components/ui/toast/use-toast'
+import { DialogDescription } from '@radix-ui/react-dialog'
+import { useElectron } from '@renderer/providers/ElectronProvider'
+import { useAuth } from '@renderer/hooks/use-auth'
+import { UpdateRequest } from '@renderer/types/main'
 
 interface UpdateGameModalProps {
   isOpen: boolean
@@ -15,6 +18,8 @@ interface UpdateGameModalProps {
 
 export function UpdateGameModal({ isOpen, onClose, gameId, appId }: UpdateGameModalProps) {
   const [step, setStep] = useState<'loading' | 'confirm' | 'success' | 'error'>('loading')
+  const { ipcRenderer } = useElectron()
+  const { user } = useAuth()
 
   const {
     data: settings,
@@ -27,7 +32,8 @@ export function UpdateGameModal({ isOpen, onClose, gameId, appId }: UpdateGameMo
         appId,
         gameId
       }
-    }
+    },
+    enabled: !!appId && !!gameId
   })
 
   useEffect(() => {
@@ -49,10 +55,32 @@ export function UpdateGameModal({ isOpen, onClose, gameId, appId }: UpdateGameMo
     }
   }, [isLoading, isError, settings, error])
 
-  const updateMutation = useMutation({
-    mutationFn: () => updatesApi.callUpdate({ gameId, appId }),
-    onSuccess: () => setStep('success'),
-    onError: (error) => {
+  const handleConfirm = async ({
+    command,
+    executorName
+  }: {
+    command: string
+    executorName: string
+  }) => {
+    setStep('loading')
+    try {
+      const result: UpdateRequest = await ipcRenderer?.invoke(
+        'updates:request',
+        { gameId, appId },
+        user?.id,
+        { command, executorName }
+      )
+      if (result.status === 'PENDING') {
+        setStep('success')
+        toast({
+          title: 'Успех',
+          description: 'Запрос на обновление успешно отправлен',
+          variant: 'default'
+        })
+      } else {
+        throw new Error('Не удалось создать запрос на обновление')
+      }
+    } catch (error) {
       setStep('error')
       toast({
         title: 'Ошибка',
@@ -60,14 +88,11 @@ export function UpdateGameModal({ isOpen, onClose, gameId, appId }: UpdateGameMo
         variant: 'destructive'
       })
     }
-  })
-
-  const handleConfirm = () => {
-    updateMutation.mutate()
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogDescription />
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Обновление игры</DialogTitle>
@@ -75,18 +100,32 @@ export function UpdateGameModal({ isOpen, onClose, gameId, appId }: UpdateGameMo
         {step === 'loading' && (
           <div className="flex items-center justify-center p-4">
             <Loader2 className="h-8 w-8 animate-spin" />
-            <span className="ml-2">Загрузка настроек...</span>
+            <span className="ml-2">Загрузка...</span>
           </div>
         )}
         {step === 'confirm' && settings && (
           <div className="p-4">
             <p>Вы уверены, что хотите обновить игру?</p>
-            <p>Команда для обновления: {JSON.stringify(settings.data[0].updateCommand)}</p>
+            <p>
+              Команда для обновления: <br />
+              <code className="relative rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-sm font-semibold">
+                {settings.data[0].updateCommand}
+              </code>
+            </p>
             <div className="mt-4 flex justify-end space-x-2">
               <Button variant="outline" onClick={onClose}>
                 Отмена
               </Button>
-              <Button onClick={handleConfirm}>Подтвердить</Button>
+              <Button
+                onClick={() =>
+                  handleConfirm({
+                    command: settings.data[0].updateCommand,
+                    executorName: settings.data[0].executorName
+                  })
+                }
+              >
+                Подтвердить
+              </Button>
             </div>
           </div>
         )}

@@ -7,6 +7,7 @@ import './globals.css'
 import { ThemeProvider } from '@renderer/providers/theme.prodiver'
 import { QueryProvider } from '@renderer/providers/query.provider'
 import { AuthProvider } from './contexts/AuthContext'
+import { ElectronProvider } from './providers/ElectronProvider'
 
 const rootElement = document.getElementById('root')!
 if (!rootElement.innerHTML) {
@@ -14,9 +15,11 @@ if (!rootElement.innerHTML) {
   root.render(
     <QueryProvider>
       <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-        <AuthProvider>
-          <RouterProvider router={router} />
-        </AuthProvider>
+        <ElectronProvider>
+          <AuthProvider>
+            <RouterProvider router={router} />
+          </AuthProvider>
+        </ElectronProvider>
       </ThemeProvider>
     </QueryProvider>
   )

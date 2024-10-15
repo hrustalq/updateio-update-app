@@ -3,7 +3,7 @@ import { useNavigate, useSearch } from '@tanstack/react-router'
 import { Card, CardHeader, CardTitle, CardContent } from '@renderer/components/ui/card'
 import { Button } from '@renderer/components/ui/button'
 import { useAuth } from '@renderer/hooks/use-auth'
-import $api from '@renderer/api'
+import $api from '@renderer/lib/api'
 import { QRCodeSVG } from 'qrcode.react'
 import { io, Socket } from 'socket.io-client'
 import { useToast } from '@renderer/components/ui/toast/use-toast'
@@ -20,12 +20,12 @@ export const Login = () => {
 
   const {
     mutate: generateQrCode,
-    data,
     reset,
     isPending
   } = $api.useMutation('post', '/api/auth/qr-code/generate', {
-    onSuccess: () => {
-      setQrCodeData(data!)
+    onSettled(data) {
+      if (!data) return
+      setQrCodeData(data)
       subscribeToQrCodeStatus(data!.code)
     },
     onError: () => {
@@ -50,15 +50,14 @@ export const Login = () => {
         socket.disconnect()
       }
     }
-  }, [generateQrCode])
+  }, [])
 
   const subscribeToQrCodeStatus = (code: string) => {
     const url = 'https://api.updateio.dev'
     const newSocket = io(url, {
       transports: ['websocket'],
       path: '/socket.io',
-      reconnection: true,
-      port: 8080
+      reconnection: true
     })
 
     newSocket.on('connect', () => {
@@ -87,7 +86,11 @@ export const Login = () => {
     newSocket.on('qrCodeStatus', async ({ status }) => {
       if (status === 'CONFIRMED') {
         try {
-          await login(code)
+          await login({
+            body: {
+              code
+            }
+          })
           toast({
             title: 'Success',
             description: 'Logged in successfully',

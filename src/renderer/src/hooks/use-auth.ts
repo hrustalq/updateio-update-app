@@ -1,7 +1,7 @@
 import { useContext } from 'react'
 import { AuthContext } from '@renderer/contexts/AuthContext'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import auth from '@renderer/api/auth'
+import { useQueryClient } from '@tanstack/react-query'
+import $api from '@renderer/lib/api'
 
 export const useAuth = () => {
   const context = useContext(AuthContext)
@@ -11,35 +11,34 @@ export const useAuth = () => {
     throw new Error('useAuth must be used within an AuthProvider')
   }
 
-  const loginMutation = useMutation({
-    mutationFn: async (code: string) => {
-      window.electron.ipcRenderer.send('auth:login-success', { message: 'Login successful' })
-      await auth.loginWithQrCode(code)
-      const user = await auth.getMe()
-      context.updateAuth(user)
-      return user
-    },
-    onSuccess: (user) => {
-      queryClient.setQueryData(['user'], user)
+  const { mutateAsync: login, isPending: isLoggingIn } = $api.useMutation(
+    'post',
+    '/api/auth/qr-code/login',
+    {
+      onSettled: async () => {
+        queryClient.refetchQueries({ queryKey: ['user', 'tokens'] })
+      }
     }
-  })
+  )
 
-  const logoutMutation = useMutation({
-    mutationFn: async () => {
-      await auth.logout()
-      context.updateAuth(undefined)
-    },
-    onSuccess: () => {
-      queryClient.clear()
-      window.electron.ipcRenderer.send('auth:logout-success', { message: 'Logout successful' })
+  const { mutateAsync: logout, isPending: isLoggingOut } = $api.useMutation(
+    'post',
+    '/api/auth/logout',
+    {
+      onSettled() {
+        context.isAuthenticated = false
+        context.user = undefined
+        window.electron.ipcRenderer.send('auth:logout')
+        queryClient.invalidateQueries({ queryKey: ['user', 'tokens'] })
+      }
     }
-  })
+  )
 
   return {
     ...context,
-    login: loginMutation.mutateAsync,
-    logout: logoutMutation.mutateAsync,
-    isLoggingIn: loginMutation.isPending,
-    isLoggingOut: logoutMutation.isPending
+    login,
+    logout,
+    isLoggingIn,
+    isLoggingOut
   }
 }

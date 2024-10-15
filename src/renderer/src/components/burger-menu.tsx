@@ -2,31 +2,23 @@ import { useState, useRef, useEffect } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Button } from './ui/button'
 import {
+  AlertCircle,
   Menu,
   PlusCircle,
   Gamepad,
-  Users,
   BarChart2,
   ChevronRight,
   ChevronDown,
   ListIcon,
   RefreshCw,
-  Server,
-  FileText,
   Download,
-  Activity,
   Moon,
   Sun,
   ToggleLeftIcon,
   ToggleRight,
-  Folders,
-  LayoutDashboard,
   Bell,
   Sliders,
-  Network,
-  Save,
-  Settings,
-  PenTool
+  Settings
 } from 'lucide-react'
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from './ui/sheet'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -51,43 +43,20 @@ const menuItems = [
     ]
   },
   {
-    label: 'Компьютеры',
-    icon: Server,
-    description: 'Управление компьютерами в клубе.',
-    quickActions: [
-      { label: 'Добавить ПК', to: '/computers/add', icon: PlusCircle },
-      { label: 'Групповое действие', to: '/computers/group-action', icon: Users }
-    ],
-    subItems: [
-      { to: '/computers/list', label: 'Список компьютеров', icon: ListIcon },
-      { to: '/computers/groups', label: 'Группы ПК', icon: Folders },
-      { to: '/computers/maintenance', label: 'Обслуживание', icon: PenTool }
-    ]
-  },
-  {
     label: 'Мониторинг',
     icon: BarChart2,
     description: 'Мониторинг состояния и статистика.',
-    quickActions: [
-      { label: 'Текущее состояние', to: '/monitoring/current', icon: Activity },
-      { label: 'Экспорт отчета', to: '/monitoring/export', icon: Download }
-    ],
+    quickActions: [],
     subItems: [
-      { to: '/monitoring/dashboard', label: 'Панель мониторинга', icon: LayoutDashboard },
       { to: '/monitoring/alerts', label: 'Оповещения', icon: Bell },
-      { to: '/monitoring/reports', label: 'Отчеты', icon: FileText }
+      { to: '/error-logs', label: 'Логи ошибок', icon: AlertCircle }
     ]
   },
   {
     label: 'Настройки',
     icon: Settings,
     description: 'Управление настройками системы.',
-    subItems: [
-      { to: '/settings/', label: 'Общие настройки', icon: Sliders },
-      { to: '/settings/network', label: 'Сеть', icon: Network },
-      { to: '/settings/backup', label: 'Резервное копирование', icon: Save },
-      { to: '/settings/users', label: 'Пользователи', icon: Users }
-    ]
+    subItems: [{ to: '/settings/', label: 'Общие настройки', icon: Sliders }]
   }
 ]
 
