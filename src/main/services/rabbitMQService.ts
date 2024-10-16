@@ -5,6 +5,7 @@ export class RabbitMQService {
   private static instance: RabbitMQService
   private connection: Connection | null = null
   private channel: Channel | null = null
+  private isConnecting: boolean = false
 
   public static getInstance(): RabbitMQService {
     if (!RabbitMQService.instance) {
@@ -14,8 +15,22 @@ export class RabbitMQService {
   }
 
   private async reconnect(): Promise<void> {
+    if (this.isConnecting) {
+      logWarn('Already attempting to connect, skipping reconnection')
+      return
+    }
+
+    if (this.isConnected()) {
+      logInfo('Already connected to RabbitMQ, skipping reconnection')
+      return
+    }
+
     logWarn('Attempting to reconnect to RabbitMQ...')
     await this.connect()
+  }
+
+  private isConnected(): boolean {
+    return this.connection !== null && this.channel !== null
   }
 
   private startKeepAlive(): void {
@@ -29,6 +44,18 @@ export class RabbitMQService {
   }
 
   public async connect(): Promise<void> {
+    if (this.isConnecting) {
+      logWarn('Connection attempt already in progress')
+      return
+    }
+
+    if (this.isConnected()) {
+      logInfo('Already connected to RabbitMQ')
+      return
+    }
+
+    this.isConnecting = true
+
     try {
       this.connection = await connect(process.env.RABBITMQ_URI || 'amqp://localhost', {
         heartbeat: 60
@@ -37,11 +64,13 @@ export class RabbitMQService {
 
       this.connection.on('error', (err) => {
         logError('RabbitMQ connection error', err)
+        this.closeConnection()
         this.reconnect()
       })
 
       this.connection.on('close', () => {
         logWarn('RabbitMQ connection closed')
+        this.closeConnection()
         this.reconnect()
       })
 
@@ -49,9 +78,31 @@ export class RabbitMQService {
       this.startKeepAlive()
     } catch (error) {
       logError('Failed to connect to RabbitMQ', error as Error)
+      this.closeConnection()
       // Attempt to reconnect after a delay
       setTimeout(() => this.reconnect(), 5000)
+    } finally {
+      this.isConnecting = false
     }
+  }
+
+  private closeConnection(): void {
+    if (this.channel) {
+      try {
+        this.channel.close()
+      } catch (error) {
+        logError('Error closing channel', error as Error)
+      }
+    }
+    if (this.connection) {
+      try {
+        this.connection.close()
+      } catch (error) {
+        logError('Error closing connection', error as Error)
+      }
+    }
+    this.channel = null
+    this.connection = null
   }
 
   public async createExchange(
