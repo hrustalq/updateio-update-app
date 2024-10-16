@@ -1,10 +1,12 @@
-import { BrowserWindow, shell, Menu } from 'electron'
+import { BrowserWindow, shell, Menu, Tray, app, MenuItemConstructorOptions } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { spawn } from 'child_process'
 import { logError, logInfo, logWarn } from './services/loggerService'
 import * as net from 'net'
+
+let tray: Tray | null = null
 
 export function createWindow(): BrowserWindow {
   const mainWindow = new BrowserWindow({
@@ -31,6 +33,7 @@ export function createWindow(): BrowserWindow {
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
     createDevMenu(mainWindow)
+    createTrayMenu(mainWindow)
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
@@ -40,7 +43,7 @@ export function createWindow(): BrowserWindow {
 }
 
 function createDevMenu(mainWindow: BrowserWindow) {
-  const devMenu = Menu.buildFromTemplate([
+  const devMenuTemplate = [
     {
       label: 'File',
       submenu: [{ role: 'quit' }]
@@ -58,8 +61,6 @@ function createDevMenu(mainWindow: BrowserWindow) {
         {
           label: 'Открыть логи',
           click: () => {
-            // Здесь нужно реализовать открытие логов
-            // Например, можно отправить IPC сообщение в рендерер для отображения логов
             mainWindow.webContents.send('open-logs')
           }
         },
@@ -71,13 +72,64 @@ function createDevMenu(mainWindow: BrowserWindow) {
         }
       ]
     }
+  ] satisfies MenuItemConstructorOptions[]
+
+  const devMenu = Menu.buildFromTemplate(devMenuTemplate as MenuItemConstructorOptions[])
+
+  mainWindow.setMenu(devMenu)
+  Menu.setApplicationMenu(devMenu)
+}
+
+function createTrayMenu(mainWindow: BrowserWindow) {
+  if (tray) {
+    tray.destroy()
+  }
+
+  tray = new Tray(icon)
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Открыть',
+      click: () => {
+        mainWindow.show()
+      }
+    },
+    {
+      label: 'Developer',
+      submenu: [
+        {
+          label: 'Открыть Developer Tools',
+          click: () => {
+            mainWindow.webContents.toggleDevTools()
+          }
+        },
+        {
+          label: 'Открыть логи',
+          click: () => {
+            mainWindow.webContents.send('open-logs')
+          }
+        },
+        {
+          label: 'Открыть Prisma Studio',
+          click: () => {
+            openPrismaStudio()
+          }
+        }
+      ]
+    },
+    {
+      label: 'Выход',
+      click: () => {
+        app.quit()
+      }
+    }
   ])
 
-  // Set the menu for the main window
-  mainWindow.setMenu(devMenu)
+  tray.setToolTip('Your App Name')
+  tray.setContextMenu(contextMenu)
 
-  // Set the menu for the application (affects all windows)
-  Menu.setApplicationMenu(devMenu)
+  tray.on('click', () => {
+    mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show()
+  })
 }
 
 function openPrismaStudio() {
