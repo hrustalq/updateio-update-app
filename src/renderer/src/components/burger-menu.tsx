@@ -5,20 +5,20 @@ import {
   AlertCircle,
   Menu,
   PlusCircle,
-  Gamepad,
   BarChart2,
   ChevronRight,
   ChevronDown,
   ListIcon,
   RefreshCw,
-  Download,
   Moon,
   Sun,
   ToggleLeftIcon,
   ToggleRight,
   Bell,
   Sliders,
-  Settings
+  Settings,
+  Home,
+  PanelBottomOpen
 } from 'lucide-react'
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from './ui/sheet'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -29,17 +29,14 @@ import { useTheme } from '@renderer/hooks/use-theme' // Убедитесь, чт
 // Update the menuItems structure
 const menuItems = [
   {
-    label: 'Обновления',
-    icon: Gamepad,
+    label: 'Главная',
+    icon: Home,
     description: 'Управление играми, обновлениями и установками.',
-    quickActions: [
-      { label: 'Добавить игру', to: '/games/add', icon: PlusCircle },
-      { label: 'Запустить обновление', to: '/games/update', icon: RefreshCw }
-    ],
+    quickActions: [{ label: 'Добавить игру', to: '/games/add', icon: PlusCircle }],
     subItems: [
-      { to: '/games/list', label: 'Список игр', icon: ListIcon },
-      { to: '/games/updates', label: 'Обновления', icon: RefreshCw },
-      { to: '/games/installations', label: 'Установки', icon: Download }
+      { to: '/', label: 'Панель управления', icon: PanelBottomOpen },
+      { to: '/games', label: 'Список игр', icon: ListIcon },
+      { to: '/games/updates', label: 'Обновления', icon: RefreshCw }
     ]
   },
   {

@@ -1,22 +1,37 @@
 import { useState, useEffect, FC } from 'react'
 import { H2 } from '@renderer/components/ui/typography'
 import { Button } from '@renderer/components/ui/button'
+import { ErrorCard } from '@renderer/components/ErrorCard'
+import { useElectron } from '@renderer/providers/ElectronProvider'
+
+interface ErrorLog {
+  error: {
+    classId?: number
+    code?: number
+    methodId?: number
+  }
+  level: string
+  message: string
+  service: string
+  timestamp: string
+}
 
 export const ErrorLog: FC = () => {
-  const [errorLogs, setErrorLogs] = useState<string[]>([])
+  const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const { send } = useElectron()
 
   useEffect(() => {
     fetchLogs(currentPage)
   }, [currentPage])
 
   const fetchLogs = (page: number) => {
-    window.electron.ipcRenderer.send('get-error-logs', page)
+    send('get-error-logs', page)
   }
 
   useEffect(() => {
-    const handleErrorLogs = (_event: unknown, data: { logs: string[]; totalPages: number }) => {
+    const handleErrorLogs = (_event: unknown, data: { logs: ErrorLog[]; totalPages: number }) => {
       setErrorLogs(data.logs)
       setTotalPages(data.totalPages)
     }
@@ -29,30 +44,28 @@ export const ErrorLog: FC = () => {
   }, [])
 
   return (
-    <main className="flex flex-col items-center justify-start w-full h-full p-4 overflow-auto flex-1">
+    <main className="flex flex-col items-center justify-start w-full p-4 overflow-hidden flex-1 h-[calc(100vh-4rem)]">
       <H2 className="mb-6">Логи ошибок</H2>
-      <section className="w-full max-w-4xl rounded-lg p-4 overflow-auto mb-4 flex-grow">
+      <section className="w-full mb-4 flex-grow h-[calc(100vh-20rem)] overflow-y-auto border-t border-b py-2">
         {errorLogs.map((log, index) => (
-          <pre key={index} className="text-sm mb-2 whitespace-pre-wrap">
-            {log}
-          </pre>
+          <ErrorCard key={index} error={log} />
         ))}
       </section>
-      <div className="flex justify-center items-center space-x-2">
+      <div className="flex justify-center items-center space-x-2 mb-4">
         <Button
           onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
           disabled={currentPage === 1}
-          className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-300"
+          variant="outline"
         >
           Предыдущая
         </Button>
         <span>
-          {currentPage} из {totalPages}
+          Страница {currentPage} из {totalPages}
         </span>
         <Button
           onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
           disabled={currentPage === totalPages}
-          className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-300"
+          variant="outline"
         >
           Следующая
         </Button>

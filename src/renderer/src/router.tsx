@@ -1,11 +1,14 @@
 import { createRouter, createRoute, createRootRoute } from '@tanstack/react-router'
-import { Index } from './routes/index'
+import { Home } from './routes/index'
 import { Root } from './routes/__root'
 import { Login } from './routes/login'
 import { Settings } from './routes/settings'
 import { queryClient } from './providers/query.provider'
 import { Logout } from './routes/logout'
 import { ErrorLog } from './routes/error-log'
+import { Games } from './routes/games'
+import { PatchNotes } from './routes/patch-notes'
+import { Game } from './routes/$game'
 
 export const rootRoute = createRootRoute({
   component: Root
@@ -26,7 +29,24 @@ export const logoutRoute = createRoute({
 export const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: Index
+  component: Home
+})
+
+export const gamesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/games',
+  component: Games
+})
+
+export const gameRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/games/$gameId',
+  component: Game,
+  validateSearch: (search: Record<string, unknown>) => {
+    return {
+      appId: search.appId as string
+    }
+  }
 })
 
 export const settingsRoute = createRoute({
@@ -41,10 +61,19 @@ export const errorLogsRoute = createRoute({
   component: ErrorLog
 })
 
+export const patchNotesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/patch-notes',
+  component: PatchNotes
+})
+
 export const routeTree = rootRoute.addChildren([
   loginRoute,
   indexRoute,
+  gamesRoute,
+  gameRoute,
   logoutRoute,
+  patchNotesRoute,
   settingsRoute,
   errorLogsRoute
 ])

@@ -1,5 +1,5 @@
 import { createLogger, format, transports } from 'winston'
-import { app } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import path from 'path'
 import fs from 'fs/promises'
 
@@ -35,12 +35,18 @@ export { logger }
 
 // Вспомогательные функции для удобного логирования
 export const logInfo = (message: string, meta?: unknown) => logger.info(message, meta)
-export const logError = (message: string, error?: Error, meta?: unknown) =>
+export const logError = (message: string, error?: Error, meta?: unknown) => {
   logger.error(message, { error, meta: meta ?? {} })
+
+  // Отправляем ошибку в renderer process
+  BrowserWindow.getAllWindows().forEach((window) => {
+    window.webContents.send('error:log', { message, stack: error?.stack })
+  })
+}
 export const logWarn = (message: string, meta?: unknown) => logger.warn(message, meta)
 export const logDebug = (message: string, meta?: unknown) => logger.debug(message, meta)
 
-// Добавьте эту функцию в конец файла
+// Функция для получения логов ошибок
 export const getErrorLogs = async (
   page: number = 1,
   limit: number = 50

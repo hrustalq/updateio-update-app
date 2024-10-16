@@ -27,12 +27,20 @@ model GameInstallation {
 
 model UpdateRequest {
   id        String   @id @default(cuid())
+
   status    String   @default("PENDING")
+
   gameId    String  
   appId     String
   userId    String
+
+  externalId String @default(cuid())
+
+  source    String
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
   logs      UpdateLog[]
 
   @@map("update_requests")
@@ -76,4 +84,10 @@ model AppSettings {
   userId               String  @unique
 
   @@map("app_settings")
+}
+
+model User {
+  id String @id
+  apiKey String
+  isCurrentUser Boolean
 }

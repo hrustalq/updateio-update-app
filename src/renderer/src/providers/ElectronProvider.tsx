@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { IpcRenderer } from '@electron-toolkit/preload'
+import { useToast } from '@renderer/components/ui/toast/use-toast'
 
 // Определяем типы для событий и запросов
-type ElectronEvent = 'auth:login-success' | 'auth:logout-success' | string
+type ElectronEvent = 'error:log' | 'updates:getRecentResponse' | string
 
 interface ElectronContextType {
   ipcRenderer: IpcRenderer | null
@@ -16,12 +17,32 @@ const ElectronContext = createContext<ElectronContextType | null>(null)
 
 export const ElectronProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [ipcRenderer, setIpcRenderer] = useState<IpcRenderer | null>(null)
+  const { toast } = useToast()
 
   useEffect(() => {
     if (window.electron) {
       setIpcRenderer(window.electron.ipcRenderer)
     }
   }, [])
+
+  useEffect(() => {
+    if (ipcRenderer) {
+      const handleError = (_event: unknown, error: { message: string; stack?: string }) => {
+        console.error('Error from main process:', error)
+        toast({
+          title: 'Error',
+          description: error.message,
+          variant: 'destructive'
+        })
+      }
+
+      ipcRenderer.on('error:log', handleError)
+
+      return () => {
+        ipcRenderer.removeListener('error:log', handleError)
+      }
+    } else return
+  }, [ipcRenderer, toast])
 
   const on = (channel: ElectronEvent, func: (...args: unknown[]) => void) => {
     ipcRenderer?.on(channel, func)

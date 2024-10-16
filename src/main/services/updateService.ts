@@ -1,17 +1,21 @@
+import { ipcMain } from 'electron'
 import { PrismaClient, UpdateRequest } from '@prisma/client'
 import { logError, logInfo } from './loggerService'
 import { ResponseError } from '../lib/types/error'
 import { executeSteamCommand } from './steamUpdater'
+import { RabbitMQService } from './rabbitMQService'
 
 const prisma = new PrismaClient()
 
 export class UpdateService {
   private static instance: UpdateService
-  private updateQueue: Array<{
-    updateRequest: UpdateRequest
-    options: { command: string; executorName: string }
-  }> = []
+  private updateQueue: UpdateRequest[] = []
   private isProcessing = false
+  private rabbitMQService: RabbitMQService
+
+  private constructor() {
+    this.rabbitMQService = RabbitMQService.getInstance()
+  }
 
   public static getInstance(): UpdateService {
     if (!UpdateService.instance) {
@@ -20,14 +24,39 @@ export class UpdateService {
     return UpdateService.instance
   }
 
-  public static async addToQueue(
-    updateRequest: UpdateRequest,
-    options: { command: string; executorName: string }
-  ) {
-    const instance = UpdateService.getInstance()
-    instance.updateQueue.push({ updateRequest, options })
-    if (!instance.isProcessing) {
-      instance.processQueue()
+  public async requestUpdate(
+    gameId: string,
+    appId: string,
+    userId: string,
+    source: 'IPC' | 'API'
+  ): Promise<UpdateRequest> {
+    const updateRequest = await prisma.updateRequest.create({
+      data: {
+        gameId,
+        appId,
+        userId,
+        status: 'PENDING',
+        source
+      }
+    })
+
+    await this.rabbitMQService.publish('updates', 'update.requested', {
+      id: updateRequest.id,
+      gameId: updateRequest.gameId,
+      appId: updateRequest.appId,
+      userId: updateRequest.userId,
+      externalId: updateRequest.externalId,
+      source: source
+    })
+
+    await this.addToQueue(updateRequest)
+    return updateRequest
+  }
+
+  public async addToQueue(updateRequest: UpdateRequest) {
+    this.updateQueue.push(updateRequest)
+    if (!this.isProcessing) {
+      this.processQueue()
     }
   }
 
@@ -38,64 +67,50 @@ export class UpdateService {
     }
 
     this.isProcessing = true
-    const { updateRequest, options } = this.updateQueue.shift()!
-    await this.handleUpdateRequest(updateRequest, options)
+    const updateRequest = this.updateQueue.shift()!
+    await this.handleUpdateRequest(updateRequest)
     this.processQueue()
   }
 
-  private async handleUpdateRequest(
-    updateRequest: UpdateRequest,
-    { command, executorName }: { command: string; executorName: string }
-  ) {
+  private async handleUpdateRequest(updateRequest: UpdateRequest) {
     try {
-      await prisma.updateRequest.update({
-        where: { id: updateRequest.id },
-        data: { status: 'PROCESSING' }
-      })
-
-      await this.executeUpdateCommand(command, executorName, updateRequest.id)
-
-      await prisma.updateRequest.update({
-        where: { id: updateRequest.id },
-        data: { status: 'COMPLETED' }
-      })
-
-      logInfo(`Update completed for game ${updateRequest.gameId}`)
+      await this.setStatus(updateRequest, 'PROCESSING')
+      await this.executeUpdate(updateRequest)
+      await this.setStatus(updateRequest, 'COMPLETED')
     } catch (error) {
-      if (error instanceof ResponseError) {
-        logError(`Update failed for game ${updateRequest.gameId}: ${error.message}`)
-      } else {
-        logError(`Update failed for game ${updateRequest.gameId}: ${(error as Error).message}`)
-      }
-      await prisma.updateRequest.update({
-        where: { id: updateRequest.id },
-        data: { status: 'FAILED' }
-      })
+      const errorMessage = error instanceof ResponseError ? error.message : (error as Error).message
+      logError(`Update failed for game ${updateRequest.gameId}: ${errorMessage}`)
+      await this.setStatus(updateRequest, 'FAILED', errorMessage)
     }
   }
 
-  private async executeUpdateCommand(
-    command: string,
-    executorName: string,
-    updateRequestId: string
-  ) {
-    switch (executorName.toLowerCase()) {
-      case 'steam':
-        await executeSteamCommand(command.split(' '))
-        break
-      // Здесь можно добавить другие исполнители, например:
-      // case 'origin':
-      //   await executeOriginCommand(command);
-      //   break;
-      default:
-        throw new Error(`Unknown executor: ${executorName}`)
-    }
+  private async setStatus(updateRequest: UpdateRequest, status: string, errorMessage?: string) {
+    const updatedRequest = await prisma.updateRequest.update({
+      where: { id: updateRequest.id },
+      data: { status, ...(errorMessage && { errorMessage }) }
+    })
 
-    // Логирование прогресса обновления
-    await this.logUpdateProgress(updateRequestId, `Update completed using ${executorName}`)
+    await this.rabbitMQService.publish('updates', 'update.status', {
+      id: updatedRequest.id,
+      gameId: updatedRequest.gameId,
+      appId: updatedRequest.appId,
+      userId: updatedRequest.userId,
+      status: updatedRequest.status
+    })
+
+    this.sendStatusUpdateViaIPC(updatedRequest)
   }
 
-  private async logUpdateProgress(updateRequestId: string, message: string, isError = false) {
+  private async executeUpdate(updateRequest: UpdateRequest) {
+    logInfo(`Executing update for game ${updateRequest.gameId}`)
+    await executeSteamCommand(['update', updateRequest.gameId])
+    await this.logUpdateProgress(
+      updateRequest.id,
+      `Update completed for game ${updateRequest.gameId}`
+    )
+  }
+
+  private async logUpdateProgress(updateRequestId: string, message: string) {
     await prisma.updateLog.create({
       data: {
         updateRequestId,
@@ -103,11 +118,46 @@ export class UpdateService {
         timestamp: new Date()
       }
     })
+    logInfo(message)
+  }
 
-    if (isError) {
-      logError(message)
-    } else {
-      logInfo(message)
+  private sendStatusUpdateViaIPC(updateRequest: UpdateRequest) {
+    ipcMain.emit('update-status-changed', {
+      id: updateRequest.id,
+      gameId: updateRequest.gameId,
+      appId: updateRequest.appId,
+      userId: updateRequest.userId,
+      status: updateRequest.status
+    })
+  }
+
+  public async handleExternalUpdateRequest(
+    externalId: string,
+    gameId: string,
+    appId: string,
+    userId: string,
+    source: 'IPC' | 'API'
+  ): Promise<void> {
+    const existingRequest = await prisma.updateRequest.findFirst({
+      where: { externalId }
+    })
+
+    if (existingRequest) {
+      logInfo(`Update request with externalId ${externalId} already exists. Skipping.`)
+      return
     }
+
+    const newUpdateRequest = await prisma.updateRequest.create({
+      data: {
+        gameId,
+        appId,
+        userId,
+        status: 'PENDING',
+        source,
+        externalId
+      }
+    })
+
+    await this.addToQueue(newUpdateRequest)
   }
 }
