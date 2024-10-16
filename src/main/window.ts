@@ -42,6 +42,10 @@ export function createWindow(): BrowserWindow {
 function createDevMenu(mainWindow: BrowserWindow) {
   const devMenu = Menu.buildFromTemplate([
     {
+      label: 'File',
+      submenu: [{ role: 'quit' }]
+    },
+    {
       label: 'Developer',
       submenu: [
         {
@@ -69,6 +73,10 @@ function createDevMenu(mainWindow: BrowserWindow) {
     }
   ])
 
+  // Set the menu for the main window
+  mainWindow.setMenu(devMenu)
+
+  // Set the menu for the application (affects all windows)
   Menu.setApplicationMenu(devMenu)
 }
 
