@@ -12,12 +12,20 @@ export function createWindow(): BrowserWindow {
   const mainWindow = new BrowserWindow({
     width: 900,
     height: 670,
-    show: false,
+    show: true,
     autoHideMenuBar: true,
+    frame: false,
+    titleBarStyle: 'hidden',
+    center: true,
+    title: 'Updateio',
+    trafficLightPosition: { x: 15, y: 10 },
+    vibrancy: 'under-window',
+    visualEffectState: 'active',
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: false,
+      webSecurity: true
     }
   })
 
@@ -35,7 +43,7 @@ export function createWindow(): BrowserWindow {
     createDevMenu(mainWindow)
     createTrayMenu(mainWindow)
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { hash: '/' })
   }
 
   global.mainWindow = mainWindow

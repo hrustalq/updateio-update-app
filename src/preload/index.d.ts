@@ -11,6 +11,5 @@ declare global {
         send(channel: string, data: unknown): void
       }
     }
-    api: unknown
   }
 }

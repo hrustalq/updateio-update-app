@@ -1,4 +1,9 @@
-import { createRouter, createRoute, createRootRoute } from '@tanstack/react-router'
+import {
+  createRouter,
+  createRoute,
+  createRootRoute,
+  createMemoryHistory
+} from '@tanstack/react-router'
 import { Home } from './routes/index'
 import { Root } from './routes/__root'
 import { Login } from './routes/login'
@@ -78,8 +83,13 @@ export const routeTree = rootRoute.addChildren([
   errorLogsRoute
 ])
 
+const history = createMemoryHistory({
+  initialEntries: ['/'] // Pass your initial url
+})
+
 export const router = createRouter({
   routeTree,
+  history,
   context: {
     queryClient
   }

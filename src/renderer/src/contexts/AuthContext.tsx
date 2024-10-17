@@ -1,5 +1,6 @@
 import { createContext, ReactNode, useEffect, useMemo } from 'react'
 import $api from '@renderer/lib/api'
+import { useElectron } from '@renderer/providers/ElectronProvider'
 
 interface AuthContextType {
   isAuthenticated: boolean
@@ -24,6 +25,8 @@ export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 const REFRESH_INTERVAL = 1000 * 60 * 10
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const { invoke } = useElectron()
+
   const { data: user, isLoading } = $api.useQuery('get', '/api/users/me', {
     queryKey: ['user'],
     retry: false,
@@ -43,6 +46,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (user) {
       window.electron.ipcRenderer.send('auth:login-success', { apiKey: user.apiKey })
+      invoke('user:setCurrent', { id: user.id, apiKey: user.apiKey })
     }
   }, [user])
 

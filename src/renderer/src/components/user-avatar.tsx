@@ -1,5 +1,5 @@
 import { useMemo, type ComponentProps, type FC } from 'react'
-import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar'
+import { Avatar, AvatarFallback } from './ui/avatar'
 import { cn } from '@renderer/lib/utils'
 import { DropdownMenu } from '@radix-ui/react-dropdown-menu'
 import { DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu'
@@ -34,7 +34,7 @@ const AuthenticatedLinks = [
 ]
 
 export const UserAvatar: FC<ComponentProps<'div'>> = ({ className, ...props }) => {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user } = useAuth()
 
   const links = useMemo(() => {
     if (isAuthenticated) {
@@ -51,8 +51,7 @@ export const UserAvatar: FC<ComponentProps<'div'>> = ({ className, ...props }) =
           asChild
         >
           <Avatar>
-            <AvatarImage src="https://github.com/shadcn.png" />
-            <AvatarFallback>CN</AvatarFallback>
+            <AvatarFallback>{user ? user?.firstName + user?.lastName : 'UI'}</AvatarFallback>
           </Avatar>
         </DropdownMenuTrigger>
         <DropdownMenuContent>

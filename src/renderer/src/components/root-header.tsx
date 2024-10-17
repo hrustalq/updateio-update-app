@@ -15,7 +15,7 @@ export const RootHeader: FC<ComponentProps<'header'>> = ({ children, className, 
   return (
     <header
       className={cn(
-        'sticky top-0 z-50 h-16 inset-x-0 backdrop-blur-md border-b border-border',
+        'sticky top-10 z-50 h-16 inset-x-0 backdrop-blur-md border-b border-border',
         className
       )}
       {...props}

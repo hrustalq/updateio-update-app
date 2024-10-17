@@ -4,18 +4,26 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()]
+    plugins: [externalizeDepsPlugin()],
+    resolve: {
+      alias: {
+        '@shared': resolve('src/shared'),
+        '@/services': resolve('src/main/services')
+      }
+    }
   },
   preload: {
     plugins: [externalizeDepsPlugin()]
   },
   renderer: {
+    assetsInclude: 'src/renderer/assets/**',
     server: {
       port: 5175
     },
     resolve: {
       alias: {
-        '@renderer': resolve('src/renderer/src')
+        '@renderer': resolve('src/renderer/src'),
+        '@shared': resolve('src/shared')
       }
     },
     plugins: [

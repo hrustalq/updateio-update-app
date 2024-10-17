@@ -2,6 +2,7 @@ import { RabbitMQService } from './rabbitMQService'
 import { UpdateService } from './updateService'
 import { PrismaService } from './prismaService'
 import { logInfo, logError } from './loggerService'
+import { QueueUpdateRequestPayload } from '@shared/models'
 
 export class UpdateListenerService {
   private static instance: UpdateListenerService
@@ -47,14 +48,8 @@ export class UpdateListenerService {
     })
   }
 
-  private async handleUpdateRequest(content: {
-    id: string
-    gameId: string
-    appId: string
-    userId: string
-    source: 'IPC' | 'API'
-  }): Promise<void> {
-    const { id, gameId, appId, userId, source } = content
+  private async handleUpdateRequest(content: QueueUpdateRequestPayload): Promise<void> {
+    const { gameId, userId } = content
 
     try {
       const currentUser = await this.prismaService.getClient().user.findFirst({
@@ -68,7 +63,7 @@ export class UpdateListenerService {
 
       if (currentUser.id === userId) {
         logInfo(`Initiating update process for game ${gameId}`)
-        await this.updateService.handleExternalUpdateRequest(id, gameId, appId, userId, source)
+        await this.updateService.handleExternalUpdateRequest(content)
       } else {
         logInfo(`Skipping update for game ${gameId} as it's not for the current user`)
       }

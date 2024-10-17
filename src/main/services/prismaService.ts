@@ -24,8 +24,10 @@ export class PrismaService {
     try {
       await this.prisma.$connect()
     } catch (error) {
-      logError('Failed to connect to database', error as Error)
+      logError('Failed to connect to database', error as Error, { service: 'PrismaService' })
       throw error
     }
   }
 }
+
+export const prisma = PrismaService.getInstance().getClient()

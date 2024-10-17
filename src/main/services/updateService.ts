@@ -2,8 +2,18 @@ import { ipcMain } from 'electron'
 import { PrismaClient, UpdateRequest } from '@prisma/client'
 import { logError, logInfo } from './loggerService'
 import { ResponseError } from '../lib/types/error'
-import { executeSteamCommand } from './steamUpdater'
 import { RabbitMQService } from './rabbitMQService'
+import { steamService } from './steamService'
+import { QueueUpdateRequestPayload, UpdateRequestPayload } from '@shared/models'
+
+interface UpdateRequestEnriched extends UpdateRequest {
+  updateCommand: string
+}
+
+interface GameInstallationInstanceCredentials {
+  appId: string
+  gameId: string
+}
 
 const prisma = new PrismaClient()
 
@@ -24,19 +34,29 @@ export class UpdateService {
     return UpdateService.instance
   }
 
-  public async requestUpdate(
-    gameId: string,
-    appId: string,
-    userId: string,
-    source: 'IPC' | 'API'
-  ): Promise<UpdateRequest> {
+  public async getUpdateCommand({ appId, gameId }: GameInstallationInstanceCredentials) {
+    return prisma.gameInstallation
+      .findUnique({
+        where: {
+          externalGameId_externalAppId: {
+            externalAppId: appId,
+            externalGameId: gameId
+          }
+        }
+      })
+      .then((rec) => {
+        if (!rec) throw new Error("Update command doesn't exist")
+        return rec.updateCommand
+      })
+  }
+
+  public async requestUpdate(evt: UpdateRequestPayload, userId: string): Promise<UpdateRequest> {
     const updateRequest = await prisma.updateRequest.create({
       data: {
-        gameId,
-        appId,
+        ...evt.event,
         userId,
         status: 'PENDING',
-        source
+        source: 'IPC'
       }
     })
 
@@ -46,14 +66,14 @@ export class UpdateService {
       appId: updateRequest.appId,
       userId: updateRequest.userId,
       externalId: updateRequest.externalId,
-      source: source
+      source: 'IPC'
     })
 
-    await this.addToQueue(updateRequest)
+    this.addToQueue({ ...updateRequest, updateCommand: evt.updateCommand })
     return updateRequest
   }
 
-  public async addToQueue(updateRequest: UpdateRequest) {
+  public async addToQueue(updateRequest: UpdateRequestEnriched) {
     this.updateQueue.push(updateRequest)
     if (!this.isProcessing) {
       this.processQueue()
@@ -101,9 +121,34 @@ export class UpdateService {
     this.sendStatusUpdateViaIPC(updatedRequest)
   }
 
-  private async executeUpdate(updateRequest: UpdateRequest) {
-    logInfo(`Executing update for game ${updateRequest.gameId}`)
-    await executeSteamCommand(['update', updateRequest.gameId])
+  private async executeUpdate(updateRequest: UpdateRequest, updateCommand?: string) {
+    let command: string[] = []
+    if (!updateCommand) {
+      const fallbackCommand = await prisma.gameInstallation
+        .findUnique({
+          where: {
+            externalGameId_externalAppId: {
+              externalGameId: updateRequest.appId,
+              externalAppId: updateRequest.gameId
+            }
+          }
+        })
+        .then((res) => {
+          if (!res) throw new Error('Update command not present!')
+          return res.updateCommand
+        })
+      command = fallbackCommand.split(' ')
+    } else {
+      command = updateCommand.split(' ')
+    }
+
+    logInfo(`Executing update for game ${updateRequest.gameId}`, {
+      service: 'UpdateService',
+      gameId: updateRequest.gameId,
+      appId: updateRequest.appId,
+      source: updateRequest.source
+    })
+    await steamService.executeSteamCommand(command)
     await this.logUpdateProgress(
       updateRequest.id,
       `Update completed for game ${updateRequest.gameId}`
@@ -131,33 +176,27 @@ export class UpdateService {
     })
   }
 
-  public async handleExternalUpdateRequest(
-    externalId: string,
-    gameId: string,
-    appId: string,
-    userId: string,
-    source: 'IPC' | 'API'
-  ): Promise<void> {
+  public async handleExternalUpdateRequest(evt: QueueUpdateRequestPayload): Promise<void> {
     const existingRequest = await prisma.updateRequest.findFirst({
-      where: { externalId }
+      where: { externalId: evt.id }
     })
 
     if (existingRequest) {
-      logInfo(`Update request with externalId ${externalId} already exists. Skipping.`)
+      logInfo(`Update request with externalId ${evt.id} already exists. Skipping.`)
       return
     }
-
     const newUpdateRequest = await prisma.updateRequest.create({
       data: {
-        gameId,
-        appId,
-        userId,
-        status: 'PENDING',
-        source,
-        externalId
+        externalId: evt.id,
+        appId: evt.appId,
+        gameId: evt.gameId,
+        userId: evt.userId,
+        source: 'API'
       }
     })
 
-    await this.addToQueue(newUpdateRequest)
+    await this.addToQueue({ ...newUpdateRequest, updateCommand: evt.updateCommand })
   }
 }
+
+export const updateService = UpdateService.getInstance()

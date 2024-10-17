@@ -1,29 +1,23 @@
 import { IpcMain } from 'electron'
 import { PrismaService } from '../../services/prismaService'
 import { logError } from '../../services/loggerService'
-import { UpdateService } from '../../services/updateService'
+import { updateService } from '../../services/updateService'
+import { userService } from '@/services/userService'
 import { Prisma } from '@prisma/client'
+import { UpdateRequestPayload } from '@shared/models'
 
 export function setupUpdateHandlers(ipcMain: IpcMain): void {
-  ipcMain.handle(
-    'updates:request',
-    async (_, createUpdateRequestDto: { gameId: string; appId: string }, userId: string) => {
-      try {
-        const updateService = UpdateService.getInstance()
-        const updateRequest = await updateService.requestUpdate(
-          createUpdateRequestDto.gameId,
-          createUpdateRequestDto.appId,
-          userId,
-          'IPC'
-        )
+  if (!userService?.user) return
 
-        return updateRequest
-      } catch (error) {
-        logError('Failed to create update request', error as Error)
-        throw error
-      }
+  ipcMain.handle('updates:request', async (_, evt: UpdateRequestPayload) => {
+    try {
+      const updateRequest = await updateService.requestUpdate(evt, userService.user!.id)
+      return updateRequest
+    } catch (error) {
+      logError('Failed to create update request', error as Error)
+      throw error
     }
-  )
+  })
 
   ipcMain.handle(
     'updates:getRecent',

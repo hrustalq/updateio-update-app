@@ -6,8 +6,8 @@ import { Loader2 } from 'lucide-react'
 import { toast } from '@renderer/components/ui/toast/use-toast'
 import { DialogDescription } from '@radix-ui/react-dialog'
 import { useElectron } from '@renderer/providers/ElectronProvider'
-import { useAuth } from '@renderer/hooks/use-auth'
 import { UpdateRequest } from '@renderer/types/main'
+import { UpdateRequestPayload } from '@shared/models'
 
 interface UpdateGameModalProps {
   isOpen: boolean
@@ -19,7 +19,6 @@ interface UpdateGameModalProps {
 export function UpdateGameModal({ isOpen, onClose, gameId, appId }: UpdateGameModalProps) {
   const [step, setStep] = useState<'loading' | 'confirm' | 'success' | 'error'>('loading')
   const { ipcRenderer } = useElectron()
-  const { user } = useAuth()
 
   const {
     data: settings,
@@ -55,21 +54,16 @@ export function UpdateGameModal({ isOpen, onClose, gameId, appId }: UpdateGameMo
     }
   }, [isLoading, isError, settings, error])
 
-  const handleConfirm = async ({
-    command,
-    executorName
-  }: {
-    command: string
-    executorName: string
-  }) => {
+  const handleConfirm = async ({ command }: { command: string }) => {
     setStep('loading')
     try {
-      const result: UpdateRequest = await ipcRenderer?.invoke(
-        'updates:request',
-        { gameId, appId },
-        user?.id,
-        { command, executorName }
-      )
+      const result: UpdateRequest = await ipcRenderer?.invoke('updates:request', {
+        event: {
+          appId,
+          gameId
+        },
+        updateCommand: command
+      } satisfies UpdateRequestPayload)
       if (result.status === 'PENDING') {
         setStep('success')
         toast({
@@ -119,8 +113,7 @@ export function UpdateGameModal({ isOpen, onClose, gameId, appId }: UpdateGameMo
               <Button
                 onClick={() =>
                   handleConfirm({
-                    command: settings.data[0].updateCommand,
-                    executorName: settings.data[0].executorName
+                    command: settings.data[0].updateCommand
                   })
                 }
               >
