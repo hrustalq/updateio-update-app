@@ -271,13 +271,21 @@ export class GameUpdateService {
       return
     }
 
+    // Проверяем, не является ли это обновление тем, которое мы сами создали
     const existingRequest = await prismaClient.updateRequest.findFirst({
-      where: { externalId: evt.id }
+      where: {
+        OR: [{ id: evt.id }, { externalId: evt.id }]
+      }
     })
 
     if (existingRequest) {
-      logInfo(`Update request with externalId ${evt.id} already exists. Skipping.`)
-      return
+      if (existingRequest.source === 'IPC') {
+        logInfo(`Update request with id/externalId ${evt.id} was created locally. Skipping.`)
+        return
+      } else if (existingRequest.source === 'API') {
+        logInfo(`Update request with externalId ${evt.id} already exists. Skipping.`)
+        return
+      }
     }
 
     const newUpdateRequest = await prismaClient.updateRequest.create({
@@ -286,7 +294,8 @@ export class GameUpdateService {
         appId: evt.appId,
         gameId: evt.gameId,
         userId: evt.userId,
-        source: 'API'
+        source: 'API',
+        status: 'PENDING'
       }
     })
 
