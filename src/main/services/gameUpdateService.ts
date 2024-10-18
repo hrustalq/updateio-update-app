@@ -113,7 +113,6 @@ export class GameUpdateService {
         gameId: updateRequest.gameId,
         appId: updateRequest.appId,
         userId: updateRequest.userId,
-        externalId: updateRequest.externalId,
         source: 'IPC'
       })
     )
