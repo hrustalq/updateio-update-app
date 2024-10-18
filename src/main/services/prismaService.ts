@@ -30,4 +30,5 @@ export class PrismaService {
   }
 }
 
-export const prisma = PrismaService.getInstance().getClient()
+export const prisma = PrismaService.getInstance()
+export const prismaClient = prisma.getClient()

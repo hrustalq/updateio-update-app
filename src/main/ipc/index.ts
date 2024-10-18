@@ -1,20 +1,22 @@
 import { ipcMain } from 'electron'
 import { setupUpdateHandlers } from './handlers/updateHandlers'
 import { setupDialogHandlers } from './handlers/dialogHandlers'
-import { setupSteamHandlers } from './handlers/steamHandlers'
 import { setupLogHandlers } from './handlers/logHandlers'
-import { UpdateListenerService } from '../services/updateListenerService'
 import { setupUserHandlers } from './handlers/userHandlers'
+import { logError, logInfo } from '@/services/loggerService'
 
 export function setupIPC(): void {
-  setupUpdateHandlers(ipcMain)
-  setupDialogHandlers(ipcMain)
-  setupSteamHandlers(ipcMain)
-  setupLogHandlers(ipcMain)
-  setupUserHandlers(ipcMain)
-
-  const updateListenerService = UpdateListenerService.getInstance()
-  updateListenerService.initialize().catch((error) => {
-    console.error('Failed to initialize UpdateListenerService:', error)
-  })
+  try {
+    setupLogHandlers(ipcMain)
+    setupUserHandlers(ipcMain)
+    setupDialogHandlers(ipcMain)
+    setupUpdateHandlers(ipcMain)
+    logInfo('All listeners has been setup', { service: 'ipc listeners initializer' })
+  } catch (error) {
+    let _error = new Error('')
+    if (error instanceof Error) _error = error
+    logError('Error during listeners initialization', _error, {
+      service: 'ipc listeners initializer'
+    })
+  }
 }

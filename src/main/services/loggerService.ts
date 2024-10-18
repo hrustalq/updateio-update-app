@@ -1,11 +1,17 @@
-import { createLogger, format, transports } from 'winston'
+import { createLogger, format, transports, Logger } from 'winston'
 import { app, BrowserWindow } from 'electron'
 import path from 'path'
 import fs from 'fs/promises'
 
+// Определение типа для метаданных
+interface LogMetadata {
+  service: string
+  [key: string]: unknown
+}
+
 const logDir = app.getPath('logs')
 
-const logger = createLogger({
+const logger: Logger = createLogger({
   level: 'info',
   format: format.combine(
     format.timestamp({
@@ -34,17 +40,23 @@ if (process.env.NODE_ENV !== 'production') {
 export { logger }
 
 // Вспомогательные функции для удобного логирования
-export const logInfo = (message: string, meta?: unknown) => logger.info(message, meta)
-export const logError = (message: string, error?: Error, meta?: unknown) => {
-  logger.error(message, { error, meta: meta ?? {} })
+export const logInfo = (message: string, meta?: Omit<LogMetadata, 'service'>) =>
+  logger.info(message, { service: 'update-app', ...meta })
+
+export const logError = (message: string, error?: Error, meta?: Omit<LogMetadata, 'service'>) => {
+  logger.error(message, { error, service: 'update-app', ...meta })
 
   // Отправляем ошибку в renderer process
   BrowserWindow.getAllWindows().forEach((window) => {
     window.webContents.send('error:log', { message, stack: error?.stack })
   })
 }
-export const logWarn = (message: string, meta?: unknown) => logger.warn(message, meta)
-export const logDebug = (message: string, meta?: unknown) => logger.debug(message, meta)
+
+export const logWarn = (message: string, meta?: Omit<LogMetadata, 'service'>) =>
+  logger.warn(message, { service: 'update-app', ...meta })
+
+export const logDebug = (message: string, meta?: Omit<LogMetadata, 'service'>) =>
+  logger.debug(message, { service: 'update-app', ...meta })
 
 // Функция для получения логов ошибок
 export const getErrorLogs = async (

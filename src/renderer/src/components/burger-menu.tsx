@@ -2,60 +2,20 @@ import { useState, useRef, useEffect } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Button } from './ui/button'
 import {
-  AlertCircle,
   Menu,
-  PlusCircle,
-  BarChart2,
   ChevronRight,
   ChevronDown,
-  ListIcon,
-  RefreshCw,
   Moon,
   Sun,
   ToggleLeftIcon,
-  ToggleRight,
-  Bell,
-  Sliders,
-  Settings,
-  Home,
-  PanelBottomOpen
+  ToggleRight
 } from 'lucide-react'
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from './ui/sheet'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@renderer/lib/utils'
 import React from 'react'
 import { useTheme } from '@renderer/hooks/use-theme' // Убедитесь, что путь к theme-provider корректен
-
-// Update the menuItems structure
-const menuItems = [
-  {
-    label: 'Главная',
-    icon: Home,
-    description: 'Управление играми, обновлениями и установками.',
-    quickActions: [{ label: 'Добавить игру', to: '/games/add', icon: PlusCircle }],
-    subItems: [
-      { to: '/', label: 'Панель управления', icon: PanelBottomOpen },
-      { to: '/games', label: 'Список игр', icon: ListIcon },
-      { to: '/games/updates', label: 'Обновления', icon: RefreshCw }
-    ]
-  },
-  {
-    label: 'Мониторинг',
-    icon: BarChart2,
-    description: 'Мониторинг состояния и статистика.',
-    quickActions: [],
-    subItems: [
-      { to: '/monitoring/alerts', label: 'Оповещения', icon: Bell },
-      { to: '/error-logs', label: 'Логи ошибок', icon: AlertCircle }
-    ]
-  },
-  {
-    label: 'Настройки',
-    icon: Settings,
-    description: 'Управление настройками системы.',
-    subItems: [{ to: '/settings/', label: 'Общие настройки', icon: Sliders }]
-  }
-]
+import { menuItems } from '@renderer/consts/menu-items'
 
 export const BurgerMenu = () => {
   const [isOpen, setIsOpen] = useState(false)
@@ -159,7 +119,7 @@ export const BurgerMenu = () => {
             <Menu className="size-8" />
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-full sm:max-w-none p-0 flex flex-col">
+        <SheetContent side="left" className="w-full mt-10 sm:max-w-none p-0 flex flex-col">
           <nav className="flex-1 flex flex-col">
             <div className="p-4 border-b">
               <h2 className="text-lg font-semibold">Меню</h2>

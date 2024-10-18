@@ -1,14 +1,16 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
-// Custom APIs for renderer
 const api = {
-  // ... другие методы
-  subscribeToQrCodeStatus: (code: string) => ipcRenderer.invoke('subscribeToQrCodeStatus', code),
-  on: (channel: string, func: (...args: unknown[]) => void) =>
-    ipcRenderer.on(channel, (_, ...args) => func(...args)),
-  off: (channel: string, func: (...args: unknown[]) => void) =>
-    ipcRenderer.removeListener(channel, func)
+  on: (channel: string, func: (...args: unknown[]) => void) => {
+    ipcRenderer.on(channel, (_event, ...args) => func(...args))
+  },
+  send: (channel: string, data: unknown) => {
+    ipcRenderer.send(channel, data)
+  },
+  invoke: (channel: string, ...args: unknown[]) => {
+    return ipcRenderer.invoke(channel, ...args)
+  }
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to
@@ -16,7 +18,6 @@ const api = {
 // just add to the DOM global.
 if (process.contextIsolated) {
   try {
-    contextBridge.exposeInMainWorld('electron', electronAPI)
     contextBridge.exposeInMainWorld('api', api)
   } catch (error) {
     console.error(error)

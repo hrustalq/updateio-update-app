@@ -1,17 +1,13 @@
 import { IpcMain } from 'electron'
-import { PrismaService } from '../../services/prismaService'
 import { logError } from '../../services/loggerService'
-import { updateService } from '../../services/updateService'
 import { userService } from '@/services/userService'
-import { Prisma } from '@prisma/client'
 import { UpdateRequestPayload } from '@shared/models'
+import { gameUpdateService } from '@/services/gameUpdateService'
 
 export function setupUpdateHandlers(ipcMain: IpcMain): void {
-  if (!userService?.user) return
-
   ipcMain.handle('updates:request', async (_, evt: UpdateRequestPayload) => {
     try {
-      const updateRequest = await updateService.requestUpdate(evt, userService.user!.id)
+      const updateRequest = await gameUpdateService.requestUpdate(evt, userService.user!.id)
       return updateRequest
     } catch (error) {
       logError('Failed to create update request', error as Error)
@@ -23,35 +19,23 @@ export function setupUpdateHandlers(ipcMain: IpcMain): void {
     'updates:getRecent',
     async (_, options: { gameId?: string; appId?: string; limit?: number }) => {
       try {
-        const prisma = PrismaService.getInstance().getClient()
-        const { gameId, appId, limit = 5 } = options
-
-        const whereClause: Prisma.UpdateRequestWhereInput = {}
-        if (gameId) whereClause.gameId = gameId
-        if (appId) whereClause.appId = appId
-
-        const recentUpdates = await prisma.updateRequest.findMany({
-          where: whereClause,
-          take: limit,
-          orderBy: { createdAt: 'desc' },
-          select: {
-            id: true,
-            status: true,
-            gameId: true,
-            appId: true,
-            logs: {
-              select: {
-                message: true
-              }
-            },
-            createdAt: true
-          }
-        })
-        return recentUpdates
+        return await gameUpdateService.getRecentUpdates(options)
       } catch (error) {
         logError('Failed to get recent updates', error as Error)
         throw error
       }
     }
   )
+
+  ipcMain.handle('steam:getSettings', async () => {
+    return gameUpdateService.getSteamSettings()
+  })
+
+  ipcMain.handle('steam:updateSettings', async (_, settings) => {
+    return gameUpdateService.updateSteamSettings(settings)
+  })
+
+  ipcMain.handle('steam:validateSteamCmd', async (_, path) => {
+    return gameUpdateService.validateSteamCmd(path)
+  })
 }

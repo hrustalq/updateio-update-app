@@ -15,6 +15,7 @@ import {
 import { SubscriptionModal } from '@renderer/components/subscription-modal'
 import { useState } from 'react'
 import { UpdateGameModal } from '@renderer/components/update-game-modal'
+import { UnsubscribeConfirmation } from '@renderer/components/unsubscribe-confirmation'
 
 export function Games() {
   const [subscriptionModalIsOpen, setSubscriptionModalIsOpen] = useState(false)
@@ -23,10 +24,19 @@ export function Games() {
 
   const [page, setPage] = useState(1)
 
+  const [unsubscribeModalState, setUnsubscribeModalState] = useState<{
+    isOpen: boolean
+    subscriptionId: string | null
+  }>({
+    isOpen: false,
+    subscriptionId: null
+  })
+
   const {
     status,
     isLoading,
-    data: subscriptions
+    data: subscriptions,
+    refetch
   } = $api.useQuery('get', '/api/subscriptions', {
     queryKey: ['subscriptions'],
     params: {
@@ -42,6 +52,7 @@ export function Games() {
 
   const handleCloseSubscriptionModal = () => {
     setSubscriptionModalIsOpen(false)
+    refetch()
   }
 
   const handleOpenUpdateModal = ({ gameId, appId }: { gameId: string; appId: string }) => {
@@ -51,6 +62,19 @@ export function Games() {
 
   const handleCloseUpdateModal = () => {
     setUpdateModalIsOpen(false)
+  }
+
+  const handleOpenUnsubscribeModal = (subscriptionId: string) => {
+    setUnsubscribeModalState({ isOpen: true, subscriptionId })
+  }
+
+  const handleCloseUnsubscribeModal = () => {
+    setUnsubscribeModalState({ isOpen: false, subscriptionId: null })
+    refetch()
+  }
+
+  const handleUnsubscribe = () => {
+    setUnsubscribeModalState({ subscriptionId: null, isOpen: false })
   }
 
   return (
@@ -127,10 +151,7 @@ export function Games() {
                         variant="ghost"
                         size="sm"
                         className="px-2 py-1 text-xs"
-                        onClick={() => {
-                          // Здесь будет логика отписки
-                          console.log(`Отписаться от ${subscription.game.name}`)
-                        }}
+                        onClick={() => handleOpenUnsubscribeModal(subscription.id)}
                       >
                         <Trash className="h-4 w-4" />
                       </Button>
@@ -190,6 +211,12 @@ export function Games() {
         onClose={handleCloseUpdateModal}
         gameId={selectedGameForUpdate.gameId}
         appId={selectedGameForUpdate.appId}
+      />
+      <UnsubscribeConfirmation
+        subscriptionId={unsubscribeModalState.subscriptionId!}
+        isOpen={unsubscribeModalState.isOpen}
+        onClose={handleCloseUnsubscribeModal}
+        onUnsubscribe={handleUnsubscribe}
       />
     </TooltipProvider>
   )

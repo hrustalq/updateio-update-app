@@ -1,16 +1,28 @@
 import { User } from '@prisma/client'
-import { prisma } from './prismaService'
+import { prismaClient } from './prismaService'
 import { logInfo, logError } from './loggerService'
 
 export class UserService {
-  public user: User | null = null
+  private static instance: UserService
+  private _user: User | null = null
+
+  public static getInstance(): UserService {
+    if (!UserService.instance) {
+      UserService.instance = new UserService()
+    }
+    return UserService.instance
+  }
+
+  get user(): User | null {
+    return this._user
+  }
 
   async init() {
     try {
-      this.user = await prisma.user.findFirst({
+      this._user = await prismaClient.user.findFirst({
         where: { isCurrentUser: true }
       })
-      logInfo('UserService initialized', { service: 'UserService', userId: this.user?.id })
+      logInfo('UserService initialized', { service: 'UserService', userId: this._user?.id })
     } catch (error) {
       logError('Error initializing UserService', error as Error, { service: 'UserService' })
     }
@@ -18,7 +30,7 @@ export class UserService {
 
   async setUser({ id, apiKey }: { id: string; apiKey: string }): Promise<void> {
     try {
-      await prisma.$transaction(async (tx) => {
+      await prismaClient.$transaction(async (tx) => {
         const existingUser = await tx.user.findUnique({ where: { id } })
 
         if (existingUser) {
@@ -26,7 +38,7 @@ export class UserService {
             where: { id },
             data: { isCurrentUser: true }
           })
-          this.user = existingUser
+          this._user = existingUser
           logInfo('Existing user set as current', { service: 'UserService', userId: id })
         } else {
           await tx.user.updateMany({
@@ -37,7 +49,7 @@ export class UserService {
           const newUser = await tx.user.create({
             data: { id, apiKey, isCurrentUser: true }
           })
-          this.user = newUser
+          this._user = newUser
           logInfo('New user created and set as current', { service: 'UserService', userId: id })
         }
       })
@@ -48,4 +60,4 @@ export class UserService {
   }
 }
 
-export const userService = new UserService()
+export const userService = UserService.getInstance()

@@ -91,3 +91,11 @@ model User {
   apiKey String
   isCurrentUser Boolean
 }
+
+model PublicationQueueItem {
+  id        String   @id @default(cuid())
+  exchange  String
+  routingKey String
+  content   Bytes
+  createdAt DateTime @default(now())
+}

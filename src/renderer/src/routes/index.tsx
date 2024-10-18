@@ -1,49 +1,28 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { H2 } from '@renderer/components/ui/typography'
 import { Card, CardHeader, CardContent, CardFooter } from '@renderer/components/ui/card'
 import { Button } from '@renderer/components/ui/button'
 import { Skeleton } from '@renderer/components/ui/skeleton'
 import { RefreshCw, AlertCircle, Settings, Gamepad, Newspaper } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
-import { useAuth } from '@renderer/hooks/use-auth'
 import { useElectron } from '@renderer/providers/ElectronProvider'
 import $api from '@renderer/lib/api'
-
-interface UpdateRequest {
-  id: string
-  status: string
-  gameId: string
-  appId: string
-}
-
-interface Game {
-  id: string
-  name: string
-}
-
-interface App {
-  id: string
-  name: string
-}
-
-interface EnrichedUpdateRequest extends UpdateRequest {
-  game?: Game
-  app?: App
-}
+import { UpdateLog } from '@shared/models'
+import { useQuery } from '@tanstack/react-query'
 
 export function Home() {
-  const { user } = useAuth()
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [recentUpdates, setRecentUpdates] = useState<EnrichedUpdateRequest[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-
   const { invoke } = useElectron()
 
-  const fetchRecentUpdates = async () => {
-    setIsLoading(true)
-    try {
-      const updates = await invoke<UpdateRequest[]>('updates:getRecent', 5)
-      const enrichedUpdates = await Promise.all(
+  const {
+    data: recentUpdates,
+    isLoading,
+    refetch
+  } = useQuery({
+    queryKey: ['recentUpdates'],
+    queryFn: async () => {
+      const updates = await invoke<UpdateLog[]>('updates:getRecent', { limit: 5 })
+      return Promise.all(
         updates.map(async (update) => {
           const [game, app] = await Promise.all([
             $api.useQuery('get', '/api/games/{id}', { params: { path: { id: update.gameId } } }),
@@ -52,13 +31,8 @@ export function Home() {
           return { ...update, game: game.data, app: app.data }
         })
       )
-      setRecentUpdates(enrichedUpdates)
-    } catch (error) {
-      console.error('Failed to fetch recent updates:', error)
-    } finally {
-      setIsLoading(false)
     }
-  }
+  })
 
   const { data: patchNotes } = $api.useQuery('get', '/api/patch-notes', {
     params: {
@@ -68,28 +42,23 @@ export function Home() {
     }
   })
 
-  useEffect(() => {
-    fetchRecentUpdates()
-  }, [])
-
-  const handleRefresh = async () => {
+  const handleRefresh = () => {
     setIsRefreshing(true)
-    await fetchRecentUpdates()
-    setIsRefreshing(false)
+    refetch().finally(() => setIsRefreshing(false))
   }
 
   return (
     <div className="p-4">
       <H2 className="mb-6">Панель управления</H2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <Card>
+        <Card className="flex flex-col">
           <CardHeader>
             <h3 className="text-lg font-semibold">Последние обновления</h3>
           </CardHeader>
-          <CardContent>
+          <CardContent className="grow basis-full">
             {isLoading ? (
-              <Skeleton className="w-full h-32" />
-            ) : (
+              <Skeleton className="w-full h-16" />
+            ) : recentUpdates && recentUpdates.length > 0 ? (
               <ul className="space-y-2">
                 {recentUpdates.map((update) => (
                   <li key={update.id} className="flex justify-between items-center">
@@ -98,6 +67,10 @@ export function Home() {
                   </li>
                 ))}
               </ul>
+            ) : (
+              <div className="h-full flex flex-col justify-center items-center">
+                <p className="text-center text-gray-500">Нет недавних обновлений</p>
+              </div>
             )}
           </CardContent>
           <CardFooter>
@@ -142,22 +115,11 @@ export function Home() {
 
         <Card>
           <CardHeader>
-            <h3 className="text-lg font-semibold">Информация о системе</h3>
-          </CardHeader>
-          <CardContent>
-            <p>Пользователь: {user?.username || 'Не авторизован'}</p>
-            <p>Версия приложения: {import.meta.env.VITE_APP_VERSION || 'Неизвестно'}</p>
-            <p>Всего игр: {recentUpdates.length || 'Загрузка...'}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
             <h3 className="text-lg font-semibold">Последние обновления системы</h3>
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <Skeleton className="w-full h-32" />
+              <Skeleton className="w-full h-16" />
             ) : (
               <ul className="space-y-2">
                 {patchNotes?.data.map((note) => (

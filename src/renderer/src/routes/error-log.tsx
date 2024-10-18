@@ -20,7 +20,7 @@ export const ErrorLog: FC = () => {
   const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
-  const { send } = useElectron()
+  const { send, on } = useElectron()
 
   useEffect(() => {
     fetchLogs(currentPage)
@@ -36,11 +36,7 @@ export const ErrorLog: FC = () => {
       setTotalPages(data.totalPages)
     }
 
-    window.electron.ipcRenderer.on('error-logs-response', handleErrorLogs)
-
-    return () => {
-      window.electron.ipcRenderer.removeListener('error-logs-response', handleErrorLogs)
-    }
+    on('error-logs-response', handleErrorLogs)
   }, [])
 
   return (

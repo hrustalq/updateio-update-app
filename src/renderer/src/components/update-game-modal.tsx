@@ -18,7 +18,7 @@ interface UpdateGameModalProps {
 
 export function UpdateGameModal({ isOpen, onClose, gameId, appId }: UpdateGameModalProps) {
   const [step, setStep] = useState<'loading' | 'confirm' | 'success' | 'error'>('loading')
-  const { ipcRenderer } = useElectron()
+  const { invoke } = useElectron()
 
   const {
     data: settings,
@@ -57,7 +57,7 @@ export function UpdateGameModal({ isOpen, onClose, gameId, appId }: UpdateGameMo
   const handleConfirm = async ({ command }: { command: string }) => {
     setStep('loading')
     try {
-      const result: UpdateRequest = await ipcRenderer?.invoke('updates:request', {
+      const result: UpdateRequest = await invoke('updates:request', {
         event: {
           appId,
           gameId
