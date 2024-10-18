@@ -321,18 +321,30 @@ export class GameUpdateService {
 
   // Steam-related methods
 
-  public async executeSteamCommand(command: string[]): Promise<void> {
-    const steamSettings = await this.getSteamSettings()
-    if (!steamSettings) {
-      throw new Error('Steam settings not found in the database')
-    }
-
-    const STEAMCMD_PATH = path.join(steamSettings.cmdPath, 'steamcmd.exe')
-
+  private executeSteamCommandInWorker(STEAMCMD_PATH: string, command: string[]): Promise<void> {
     return new Promise((resolve, reject) => {
-      const worker = new Worker(path.join(__dirname, '../workers', 'steamCommandWorker.js'), {
-        workerData: { STEAMCMD_PATH, command }
-      })
+      const worker = new Worker(
+        `
+        const { workerData, parentPort } = require('worker_threads');
+        const { spawn } = require('child_process');
+        const { STEAMCMD_PATH, command } = workerData;
+
+        const steamcmd = spawn(STEAMCMD_PATH, command);
+
+        steamcmd.stdout.on('data', (data) => {
+          parentPort.postMessage({ type: 'log', data: data.toString() });
+        });
+
+        steamcmd.stderr.on('data', (data) => {
+          parentPort.postMessage({ type: 'error', data: data.toString() });
+        });
+
+        steamcmd.on('close', (code) => {
+          parentPort.postMessage({ type: 'exit', code });
+        });
+        `,
+        { eval: true, workerData: { STEAMCMD_PATH, command } }
+      )
 
       worker.on('message', (message) => {
         if (message.type === 'log') {
@@ -356,6 +368,17 @@ export class GameUpdateService {
         reject(error)
       })
     })
+  }
+
+  public async executeSteamCommand(command: string[]): Promise<void> {
+    const steamSettings = await this.getSteamSettings()
+    if (!steamSettings) {
+      throw new Error('Steam settings not found in the database')
+    }
+
+    const STEAMCMD_PATH = path.join(steamSettings.cmdPath, 'steamcmd.exe')
+
+    return this.executeSteamCommandInWorker(STEAMCMD_PATH, command)
   }
 
   public validateSteamCmd(cmdPath: string): boolean {

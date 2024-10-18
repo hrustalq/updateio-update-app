@@ -10,6 +10,13 @@ export default defineConfig({
         '@shared': resolve('src/shared'),
         '@/services': resolve('src/main/services')
       }
+    },
+    worker: {
+      rollupOptions: {
+        output: {
+          entryFileNames: '[name].ts'
+        }
+      }
     }
   },
   preload: {
