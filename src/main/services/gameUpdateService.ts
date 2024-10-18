@@ -9,9 +9,13 @@ import { Worker } from 'worker_threads'
 import path from 'path'
 import fs from 'fs'
 
+interface UpdateRequestWithCommand extends UpdateRequest {
+  updateCommand: string
+}
+
 export class GameUpdateService {
   private static instance: GameUpdateService
-  private updateQueue: UpdateRequest[] = []
+  private updateQueue: UpdateRequestWithCommand[] = []
   private isProcessing = false
   private connection: Connection | null = null
   private channel: Channel | null = null
@@ -176,7 +180,7 @@ export class GameUpdateService {
     }
   }
 
-  private addToQueue(updateRequest: UpdateRequest & { updateCommand?: string }) {
+  private addToQueue(updateRequest: UpdateRequest & { updateCommand: string }) {
     this.updateQueue.push(updateRequest)
     if (!this.isProcessing) {
       this.processQueue()
@@ -195,7 +199,7 @@ export class GameUpdateService {
     this.processQueue()
   }
 
-  private async handleUpdateRequest(updateRequest: UpdateRequest & { updateCommand?: string }) {
+  private async handleUpdateRequest(updateRequest: UpdateRequest & { updateCommand: string }) {
     try {
       await this.setStatus(updateRequest, 'PROCESSING')
       await this.executeUpdate(updateRequest)
@@ -217,48 +221,18 @@ export class GameUpdateService {
     this.sendStatusUpdateViaIPC(updatedRequest)
   }
 
-  private async executeUpdate(updateRequest: UpdateRequest & { updateCommand?: string }) {
-    let command: string[]
-    if (!updateRequest.updateCommand) {
-      const fallbackCommand = await this.getUpdateCommand({
-        appId: updateRequest.appId,
-        gameId: updateRequest.gameId
-      })
-      command = fallbackCommand.split(' ')
-    } else {
-      command = updateRequest.updateCommand.split(' ')
-    }
-
+  private async executeUpdate(updateRequest: UpdateRequest & { updateCommand: string }) {
     logInfo(`Executing update for game ${updateRequest.gameId}`, {
       service: 'GameUpdateService',
       gameId: updateRequest.gameId,
       appId: updateRequest.appId,
       source: updateRequest.source
     })
-    await this.executeSteamCommand(command)
+    await this.executeSteamCommand(updateRequest.updateCommand.split(' '))
     await this.logUpdateProgress(
       updateRequest.id,
       `Update completed for game ${updateRequest.gameId}`
     )
-  }
-
-  private async getUpdateCommand({
-    appId,
-    gameId
-  }: {
-    appId: string
-    gameId: string
-  }): Promise<string> {
-    const installation = await prismaClient.gameInstallation.findUnique({
-      where: {
-        externalGameId_externalAppId: {
-          externalAppId: appId,
-          externalGameId: gameId
-        }
-      }
-    })
-    if (!installation) throw new Error("Update command doesn't exist")
-    return installation.updateCommand
   }
 
   private async logUpdateProgress(updateRequestId: string, message: string) {
