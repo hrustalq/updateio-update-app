@@ -330,7 +330,7 @@ export class GameUpdateService {
     const STEAMCMD_PATH = path.join(steamSettings.cmdPath, 'steamcmd.exe')
 
     return new Promise((resolve, reject) => {
-      const worker = new Worker(path.join(__dirname, '../workers', 'steamCommandWorker'), {
+      const worker = new Worker(path.join(__dirname, '../workers', 'steamCommandWorker.js'), {
         workerData: { STEAMCMD_PATH, command }
       })
 

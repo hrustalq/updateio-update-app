@@ -1,5 +1,5 @@
-import { workerData, parentPort } from 'worker_threads'
-import { spawn } from 'child_process'
+const { workerData, parentPort } = require('worker_threads')
+const { spawn } = require('child_process')
 
 const { STEAMCMD_PATH, command } = workerData
 
