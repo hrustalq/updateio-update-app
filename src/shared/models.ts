@@ -11,7 +11,7 @@ export interface QueueUpdateRequestPayload {
   appId: string
   gameId: string
   userId: string
-  source: 'API' | 'IPC'
+  source: 'API' | 'IPC' | 'Telegram'
   updateCommand: string
 }
 

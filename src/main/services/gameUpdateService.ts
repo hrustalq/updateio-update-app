@@ -76,18 +76,45 @@ export class GameUpdateService {
 
   private async startListening(): Promise<void> {
     if (!this.channel) throw new Error('RabbitMQ channel is not initialized')
+    logInfo('Starting to listen for messages on the update_requests queue', {
+      service: 'GameUpdateService'
+    })
     await this.channel.consume('update_requests', async (msg) => {
       if (msg) {
+        logInfo('Received message from update_requests queue', {
+          service: 'GameUpdateService',
+          messageContent: msg.content.toString()
+        })
         try {
           const content = JSON.parse(msg.content.toString()) as QueueUpdateRequestPayload
+          logInfo('Parsed message content', {
+            service: 'GameUpdateService',
+            parsedContent: JSON.stringify(content)
+          })
           await this.handleExternalUpdateRequest(content)
+          logInfo('Successfully handled external update request', {
+            service: 'GameUpdateService',
+            requestId: content.id
+          })
         } catch (error) {
-          logError('Error processing update request', error as Error)
+          logError('Error processing update request', error as Error, {
+            service: 'GameUpdateService',
+            messageContent: msg.content.toString()
+          })
         } finally {
           this.channel!.ack(msg)
+          logInfo('Acknowledged message', {
+            service: 'GameUpdateService',
+            messageId: msg.properties.messageId
+          })
         }
+      } else {
+        logWarn('Received null message from update_requests queue', {
+          service: 'GameUpdateService'
+        })
       }
     })
+    logInfo('Listening setup completed for update_requests queue', { service: 'GameUpdateService' })
   }
 
   public async requestUpdate(evt: UpdateRequestPayload, userId: string): Promise<UpdateRequest> {
@@ -123,7 +150,7 @@ export class GameUpdateService {
   private async publishStatusUpdate(updateRequest: UpdateRequest): Promise<void> {
     const content = Buffer.from(
       JSON.stringify({
-        id: updateRequest.id,
+        id: updateRequest.externalId,
         gameId: updateRequest.gameId,
         appId: updateRequest.appId,
         userId: updateRequest.userId,
@@ -281,7 +308,7 @@ export class GameUpdateService {
       if (existingRequest.source === 'IPC') {
         logInfo(`Update request with id/externalId ${evt.id} was created locally. Skipping.`)
         return
-      } else if (existingRequest.source === 'API') {
+      } else if (existingRequest.source === 'API' || existingRequest.source === 'Telegram') {
         logInfo(`Update request with externalId ${evt.id} already exists. Skipping.`)
         return
       }
@@ -293,7 +320,7 @@ export class GameUpdateService {
         appId: evt.appId,
         gameId: evt.gameId,
         userId: evt.userId,
-        source: 'API',
+        source: evt.source,
         status: 'PENDING'
       }
     })
