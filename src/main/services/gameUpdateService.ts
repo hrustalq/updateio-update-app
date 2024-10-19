@@ -136,11 +136,11 @@ export class GameUpdateService {
   private async publishUpdateRequest(updateRequest: UpdateRequest): Promise<void> {
     const content = Buffer.from(
       JSON.stringify({
-        id: updateRequest.id,
+        id: updateRequest.source === 'IPC' ? updateRequest.id : updateRequest.externalId,
         gameId: updateRequest.gameId,
         appId: updateRequest.appId,
         userId: updateRequest.userId,
-        source: 'IPC'
+        source: updateRequest.source
       })
     )
 
@@ -150,7 +150,7 @@ export class GameUpdateService {
   private async publishStatusUpdate(updateRequest: UpdateRequest): Promise<void> {
     const content = Buffer.from(
       JSON.stringify({
-        id: updateRequest.externalId,
+        id: updateRequest.source === 'IPC' ? updateRequest.id : updateRequest.externalId,
         gameId: updateRequest.gameId,
         appId: updateRequest.appId,
         userId: updateRequest.userId,
