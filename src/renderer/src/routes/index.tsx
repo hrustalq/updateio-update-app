@@ -21,7 +21,7 @@ export function Home() {
   } = useQuery({
     queryKey: ['recentUpdates'],
     queryFn: async () => {
-      const updates = await invoke<UpdateLog[]>('updates:getRecent', { limit: 5 })
+      const updates = await invoke<UpdateLog[]>('updates:action', 'getRecent', { limit: 5 })
       return Promise.all(
         updates.map(async (update) => {
           const [game, app] = await Promise.all([

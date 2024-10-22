@@ -50,7 +50,11 @@ export function Game() {
 
   const fetchRecentUpdates = async () => {
     try {
-      const updates = await invoke<RecentUpdate[]>('updates:getRecent', { gameId, appId, limit: 5 })
+      const updates = await invoke<RecentUpdate[]>('updates:action', 'getRecent', {
+        gameId,
+        appId,
+        limit: 5
+      })
       setRecentUpdates(updates)
     } catch (error) {
       console.error('Failed to fetch recent updates:', error)
