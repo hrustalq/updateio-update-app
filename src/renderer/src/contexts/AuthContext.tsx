@@ -46,7 +46,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (user) {
       send('auth:login-success', { apiKey: user.apiKey })
-      invoke('user:setCurrent', { id: user.id, apiKey: user.apiKey })
+      invoke('user:manage', 'set', { id: user.id, apiKey: user.apiKey })
     }
   }, [user])
 

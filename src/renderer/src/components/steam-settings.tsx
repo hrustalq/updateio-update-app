@@ -43,7 +43,7 @@ export function SteamSettings() {
 
   const updateMutation = useMutation({
     mutationFn: async (data: SteamSettingsForm) => {
-      return await invoke('steam:updateSettings', data)
+      return await invoke('updates:action', 'updateSteamSettings', data)
     },
     onSuccess: () => {
       toast({ title: 'Успех', description: 'Настройки Steam успешно обновлены' })
@@ -60,7 +60,7 @@ export function SteamSettings() {
   })
 
   const validateCmd = useCallback(async (path: string) => {
-    return await invoke('steam:validateSteamCmd', path)
+    return await invoke('updates:action', 'validateSteamCmd', path)
   }, [])
 
   const onSubmit = async (data: SteamSettingsForm) => {

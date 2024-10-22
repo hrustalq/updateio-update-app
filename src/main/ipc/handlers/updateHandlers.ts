@@ -1,54 +1,47 @@
 import { IpcMain } from 'electron'
 import { logError } from '../../services/loggerService'
 import { userService } from '@/services/userService'
-import { UpdateRequestPayload } from '@shared/models'
 import { gameUpdateService } from '@/services/gameUpdateService'
 
 export function setupUpdateHandlers(ipcMain: IpcMain): void {
-  ipcMain.handle('updates:request', async (_, evt: UpdateRequestPayload) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ipcMain.handle('updates:action', async (_, action: string, payload: any) => {
     try {
-      const steamSettings = await gameUpdateService.getSteamSettings()
-      if (!steamSettings) {
-        throw new Error('Steam settings not found in the database')
+      switch (action) {
+        case 'request': {
+          const steamSettings = await gameUpdateService.getSteamSettings()
+          if (!steamSettings) {
+            throw new Error('Steam settings not found in the database')
+          }
+          return await gameUpdateService.requestUpdate(payload, userService.user!.id)
+        }
+
+        case 'setInstallPath': {
+          const { gameId, appId, path } = payload
+          return await gameUpdateService.setGameInstallPath(gameId, appId, path)
+        }
+
+        case 'getInstallPath':
+          return await gameUpdateService.getGameInstallPath(payload.gameId, payload.appId)
+
+        case 'getRecent':
+          return await gameUpdateService.getRecentUpdates(payload)
+
+        case 'getSteamSettings':
+          return await gameUpdateService.getSteamSettings()
+
+        case 'updateSteamSettings':
+          return await gameUpdateService.updateSteamSettings(payload)
+
+        case 'validateSteamCmd':
+          return gameUpdateService.validateSteamCmd(payload)
+
+        default:
+          throw new Error(`Unknown action: ${action}`)
       }
     } catch (error) {
-      logError('Failed to validate Steam credentials', error as Error, {
-        event: evt
-      })
+      logError(`Failed to process action: ${action}`, error as Error, { action, payload })
       throw error
     }
-    try {
-      const updateRequest = await gameUpdateService.requestUpdate(evt, userService.user!.id)
-      return updateRequest
-    } catch (error) {
-      logError('Failed to create update request', error as Error, {
-        event: evt
-      })
-      throw error
-    }
-  })
-
-  ipcMain.handle(
-    'updates:getRecent',
-    async (_, options: { gameId?: string; appId?: string; limit?: number }) => {
-      try {
-        return await gameUpdateService.getRecentUpdates(options)
-      } catch (error) {
-        logError('Failed to get recent updates', error as Error)
-        throw error
-      }
-    }
-  )
-
-  ipcMain.handle('steam:getSettings', async () => {
-    return gameUpdateService.getSteamSettings()
-  })
-
-  ipcMain.handle('steam:updateSettings', async (_, settings) => {
-    return gameUpdateService.updateSteamSettings(settings)
-  })
-
-  ipcMain.handle('steam:validateSteamCmd', async (_, path) => {
-    return gameUpdateService.validateSteamCmd(path)
   })
 }

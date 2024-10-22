@@ -491,6 +491,52 @@ export class GameUpdateService {
       }))
     })
   }
+
+  public async getGameInstallPath(gameId: string, appId: string): Promise<string | null> {
+    const gameInstallation = await prismaClient.gameInstallation.findFirst({
+      where: { externalGameId: gameId, externalAppId: appId }
+    })
+    return gameInstallation?.installPath || null
+  }
+
+  public async setGameInstallPath(
+    gameId: string,
+    appId: string,
+    installPath: string
+  ): Promise<void> {
+    try {
+      await prismaClient.gameInstallation.upsert({
+        where: {
+          externalGameId_externalAppId: {
+            externalGameId: gameId,
+            externalAppId: appId
+          }
+        },
+        update: {
+          installPath: installPath
+        },
+        create: {
+          externalGameId: gameId,
+          externalAppId: appId,
+          installPath: installPath,
+          updateCommand: '',
+          fallbackUpdateCommand: ''
+        }
+      })
+      logInfo(`Updated install path for game ${gameId}`, {
+        service: 'GameUpdateService',
+        gameId,
+        installPath
+      })
+    } catch (error) {
+      logError(`Failed to update install path for game ${gameId}`, error as Error, {
+        service: 'GameUpdateService',
+        gameId,
+        installPath
+      })
+      throw error
+    }
+  }
 }
 
 export const gameUpdateService = GameUpdateService.getInstance()

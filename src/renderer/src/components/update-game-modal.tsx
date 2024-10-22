@@ -65,7 +65,7 @@ export function UpdateGameModal({ isOpen, onClose, gameId, appId }: UpdateGameMo
   const handleConfirm = async ({ command }: { command: string }) => {
     setStep('loading')
     try {
-      const result: UpdateRequest = await invoke('updates:request', {
+      const result: UpdateRequest = await invoke('updates:action', 'request', {
         event: {
           appId,
           gameId

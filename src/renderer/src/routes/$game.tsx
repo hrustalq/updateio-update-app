@@ -70,7 +70,7 @@ export function Game() {
     const newPath = e.target.value
     setInstallPath(newPath)
     try {
-      await invoke('game:setInstallPath', { gameId, path: newPath })
+      await invoke('updates:action', 'setInstallPath', { gameId, appId, path: newPath })
     } catch (error) {
       console.error('Failed to set install path:', error)
     }
@@ -81,7 +81,7 @@ export function Game() {
       const selectedPath = await invoke<string>('dialog:openFolder')
       if (selectedPath) {
         setInstallPath(selectedPath)
-        await invoke('game:setInstallPath', { gameId, path: selectedPath })
+        await invoke('updates:action', 'setInstallPath', { gameId, appId, path: selectedPath })
       }
     } catch (error) {
       console.error('Failed to open folder dialog:', error)
