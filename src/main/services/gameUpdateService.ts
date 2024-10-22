@@ -8,6 +8,10 @@ import { QueueUpdateRequestPayload, UpdateRequestPayload } from '@shared/models'
 import path from 'path'
 import fs from 'fs'
 import { spawn } from 'child_process'
+import { exec } from 'child_process'
+import { promisify } from 'util'
+import fsPromises from 'fs/promises'
+import { compareVersions } from 'compare-versions'
 
 interface UpdateRequestWithCommand extends UpdateRequest {
   updateCommand: string
@@ -341,13 +345,7 @@ export class GameUpdateService {
 
   private async executeSteamCommand(appId: string, installDir: string): Promise<void> {
     try {
-      const credentials = await prismaClient.steamSettings.findFirst()
-      if (!credentials) {
-        throw new Error('Steam credentials not found in the database')
-      }
-
-      const command = `+login ${credentials.username} +password ${credentials.password} +app_update ${appId} +quit`
-
+      const credentials = await this.getSecureCredentials()
       const steamSettings = await this.getSteamSettings()
       if (!steamSettings) {
         throw new Error('Steam settings not found in the database')
@@ -355,7 +353,39 @@ export class GameUpdateService {
 
       const STEAMCMD_PATH = path.join(steamSettings.cmdPath, 'steamcmd.exe')
 
-      await this.executeSteamCommandConcurrently(STEAMCMD_PATH, command.split(' '))
+      // Check available disk space
+      await this.checkDiskSpace(installDir)
+
+      // Verify SteamCMD version
+      await this.verifySteamCmdVersion(STEAMCMD_PATH)
+
+      const command = [
+        '+login',
+        credentials.username,
+        credentials.password,
+        '+force_install_dir',
+        installDir,
+        '+app_update',
+        appId,
+        '+verify',
+        '+quit'
+      ]
+
+      logInfo(`Preparing to execute SteamCMD command for appId: ${appId}`, {
+        appId,
+        installDir,
+        steamCmdPath: STEAMCMD_PATH
+      })
+
+      await this.executeSteamCommandConcurrently(STEAMCMD_PATH, command)
+
+      // Verify update
+      await this.verifyGameUpdate(appId, installDir)
+
+      logInfo(`SteamCMD command completed successfully for appId: ${appId}`, {
+        appId,
+        installDir
+      })
     } catch (error) {
       logError('Error executing Steam command', error as Error, {
         appId,
@@ -369,16 +399,29 @@ export class GameUpdateService {
   private executeSteamCommandConcurrently(STEAMCMD_PATH: string, command: string[]): Promise<void> {
     return new Promise((resolve, reject) => {
       const steamcmd = spawn(STEAMCMD_PATH, command)
+      let lastOutputTime = Date.now()
+      const timeout = 300000 // 5 minutes timeout
+
+      const checkTimeout = setInterval(() => {
+        if (Date.now() - lastOutputTime > timeout) {
+          clearInterval(checkTimeout)
+          steamcmd.kill()
+          reject(new Error('SteamCMD command timed out after 5 minutes of inactivity'))
+        }
+      }, 10000) // Check every 10 seconds
 
       steamcmd.stdout.on('data', (data) => {
+        lastOutputTime = Date.now()
         logInfo(`SteamCMD output: ${data.toString()}`, { command: command.join(' ') })
       })
 
       steamcmd.stderr.on('data', (data) => {
+        lastOutputTime = Date.now()
         logError(`SteamCMD error: ${data.toString()}`, undefined, { command: command.join(' ') })
       })
 
       steamcmd.on('close', (code) => {
+        clearInterval(checkTimeout)
         if (code === 0) {
           logInfo(`SteamCMD command executed successfully: ${command.join(' ')}`)
           resolve()
@@ -393,12 +436,16 @@ export class GameUpdateService {
       })
 
       steamcmd.on('error', (error) => {
+        clearInterval(checkTimeout)
         logError(`SteamCMD spawn error: ${error.message}`, error, {
           command: command.join(' '),
           spawnError: true
         })
         reject(error)
       })
+
+      // Log when the process starts
+      logInfo(`Starting SteamCMD process: ${STEAMCMD_PATH} ${command.join(' ')}`)
     })
   }
 
@@ -515,6 +562,98 @@ export class GameUpdateService {
         gameId,
         installPath
       })
+      throw error
+    }
+  }
+
+  private async getSecureCredentials(): Promise<{ username: string; password: string }> {
+    // In a real-world scenario, you'd use a secure storage solution.
+    // For this example, we'll retrieve from environment variables.
+    const username = process.env.STEAM_USERNAME
+    const password = process.env.STEAM_PASSWORD
+
+    if (!username || !password) {
+      throw new Error('Steam credentials not found in environment variables')
+    }
+
+    return { username, password }
+  }
+
+  private async checkDiskSpace(installDir: string): Promise<void> {
+    const execAsync = promisify(exec)
+    let command: string
+    let freeSpaceRegex: RegExp
+
+    if (process.platform === 'win32') {
+      command = `wmic logicaldisk where "DeviceID='${path.parse(installDir).root.charAt(0)}:'" get freespace`
+      freeSpaceRegex = /(\d+)/
+    } else {
+      command = `df -k "${installDir}" | tail -1 | awk '{print $4}'`
+      freeSpaceRegex = /^(\d+)$/
+    }
+
+    try {
+      const { stdout } = await execAsync(command)
+      const match = stdout.match(freeSpaceRegex)
+      if (match) {
+        const freeSpace = parseInt(match[1], 10)
+        const freeSpaceGB = freeSpace / (1024 * 1024) // Convert to GB
+
+        if (freeSpaceGB < 10) {
+          // Require at least 10GB free space
+          throw new Error(`Insufficient disk space. Only ${freeSpaceGB.toFixed(2)}GB available.`)
+        }
+      } else {
+        throw new Error('Unable to determine free disk space')
+      }
+    } catch (error) {
+      logError('Error checking disk space', error as Error)
+      throw error
+    }
+  }
+
+  private async verifySteamCmdVersion(steamCmdPath: string): Promise<void> {
+    const execAsync = promisify(exec)
+    const minVersion = '1728594755' // Minimum required version
+
+    try {
+      const { stdout } = await execAsync(`"${steamCmdPath}" +version +quit`)
+      const versionMatch = stdout.match(
+        /Steam Console Client \(c\) Valve Corporation - version (\d+)/
+      )
+
+      if (versionMatch) {
+        const currentVersion = versionMatch[1]
+        if (compareVersions(currentVersion, minVersion) < 0) {
+          logWarn(`SteamCMD version ${currentVersion} is outdated. Updating...`)
+          await execAsync(`"${steamCmdPath}" +quit`)
+          logInfo('SteamCMD updated successfully')
+        } else {
+          logInfo(`SteamCMD version ${currentVersion} is up to date`)
+        }
+      } else {
+        throw new Error('Unable to determine SteamCMD version')
+      }
+    } catch (error) {
+      logError('Error verifying SteamCMD version', error as Error)
+      throw error
+    }
+  }
+
+  private async verifyGameUpdate(appId: string, installDir: string): Promise<void> {
+    try {
+      const manifestPath = path.join(installDir, 'steamapps', `appmanifest_${appId}.acf`)
+      const manifestContent = await fsPromises.readFile(manifestPath, 'utf-8')
+
+      // Check if the manifest contains 'fully installed' state
+      if (!manifestContent.includes('"StateFlags"\t\t"4"')) {
+        throw new Error(`Game ${appId} update verification failed: incomplete installation`)
+      }
+
+      // You could add more checks here, such as verifying file integrity
+      logInfo(`Game ${appId} update verified successfully`)
+    } catch (error) {
+      logError(`Error verifying game update for ${appId}`, error as Error)
       throw error
     }
   }
