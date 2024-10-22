@@ -5,9 +5,9 @@ import { logError, logInfo, logWarn } from './loggerService'
 import { ResponseError } from '../lib/types/error'
 import { connect, Connection, Channel } from 'amqplib'
 import { QueueUpdateRequestPayload, UpdateRequestPayload } from '@shared/models'
-import { Worker } from 'worker_threads'
 import path from 'path'
 import fs from 'fs'
+import { spawn } from 'child_process'
 
 interface UpdateRequestWithCommand extends UpdateRequest {
   updateCommand: string
@@ -339,69 +339,13 @@ export class GameUpdateService {
 
   // Steam-related methods
 
-  private executeSteamCommandInWorker(STEAMCMD_PATH: string, command: string[]): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const worker = new Worker(
-        `
-        const { workerData, parentPort } = require('worker_threads');
-        const { spawn } = require('child_process');
-        const { STEAMCMD_PATH, command } = workerData;
-
-        const steamcmd = spawn(STEAMCMD_PATH, command);
-
-        steamcmd.stdout.on('data', (data) => {
-          parentPort.postMessage({ type: 'log', data: data.toString() });
-        });
-
-        steamcmd.stderr.on('data', (data) => {
-          parentPort.postMessage({ type: 'error', data: data.toString() });
-        });
-
-        steamcmd.on('close', (code) => {
-          parentPort.postMessage({ type: 'exit', code });
-        });
-        `,
-        { eval: true, workerData: { STEAMCMD_PATH, command } }
-      )
-
-      worker.on('message', (message) => {
-        if (message.type === 'log') {
-          logInfo(`SteamCMD output: ${message.data}`, { command: command.join(' ') })
-        } else if (message.type === 'error') {
-          logError(`SteamCMD error: ${message.data}`, undefined, { command: command.join(' ') })
-        } else if (message.type === 'exit') {
-          if (message.code === 0) {
-            logInfo(`SteamCMD command executed successfully: ${command.join(' ')}`)
-            resolve()
-          } else {
-            const error = new Error(`SteamCMD exited with code ${message.code}`)
-            logError(`SteamCMD command failed: ${command.join(' ')}`, error, {
-              exitCode: message.code,
-              command: command.join(' ')
-            })
-            reject(error)
-          }
-        }
-      })
-
-      worker.on('error', (error) => {
-        logError(`Worker error: ${error.message}`, error, {
-          command: command.join(' '),
-          workerError: true
-        })
-        reject(error)
-      })
-    })
-  }
-
-  public async executeSteamCommand(appId: string, installDir: string): Promise<void> {
+  private async executeSteamCommand(appId: string, installDir: string): Promise<void> {
     try {
       const credentials = await prismaClient.steamSettings.findFirst()
       if (!credentials) {
         throw new Error('Steam credentials not found in the database')
       }
 
-      // Use single quotes around the path to handle spaces and special characters
       const command = `+login ${credentials.username} +password ${credentials.password} +app_update ${appId} +quit`
 
       const steamSettings = await this.getSteamSettings()
@@ -411,7 +355,7 @@ export class GameUpdateService {
 
       const STEAMCMD_PATH = path.join(steamSettings.cmdPath, 'steamcmd.exe')
 
-      await this.executeSteamCommandInWorker(STEAMCMD_PATH, command.split(' '))
+      await this.executeSteamCommandConcurrently(STEAMCMD_PATH, command.split(' '))
     } catch (error) {
       logError('Error executing Steam command', error as Error, {
         appId,
@@ -420,6 +364,42 @@ export class GameUpdateService {
       })
       throw error
     }
+  }
+
+  private executeSteamCommandConcurrently(STEAMCMD_PATH: string, command: string[]): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const steamcmd = spawn(STEAMCMD_PATH, command)
+
+      steamcmd.stdout.on('data', (data) => {
+        logInfo(`SteamCMD output: ${data.toString()}`, { command: command.join(' ') })
+      })
+
+      steamcmd.stderr.on('data', (data) => {
+        logError(`SteamCMD error: ${data.toString()}`, undefined, { command: command.join(' ') })
+      })
+
+      steamcmd.on('close', (code) => {
+        if (code === 0) {
+          logInfo(`SteamCMD command executed successfully: ${command.join(' ')}`)
+          resolve()
+        } else {
+          const error = new Error(`SteamCMD exited with code ${code}`)
+          logError(`SteamCMD command failed: ${command.join(' ')}`, error, {
+            exitCode: code,
+            command: command.join(' ')
+          })
+          reject(error)
+        }
+      })
+
+      steamcmd.on('error', (error) => {
+        logError(`SteamCMD spawn error: ${error.message}`, error, {
+          command: command.join(' '),
+          spawnError: true
+        })
+        reject(error)
+      })
+    })
   }
 
   public validateSteamCmd(cmdPath: string): boolean {
