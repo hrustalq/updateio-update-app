@@ -118,3 +118,13 @@ export interface IPCResponse<T> {
   data?: T
   error?: string
 }
+
+export interface LoginResult {
+  output: string[]
+  needsSteamGuard: boolean
+}
+
+export interface SteamGuardResult {
+  output: string[]
+  success: boolean
+}

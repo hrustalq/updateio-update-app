@@ -32,7 +32,7 @@ export function SteamLogin() {
   const handleLogin = async () => {
     setIsLoading(true)
     try {
-      await invoke('updates:action', 'loginToSteam')
+      await invoke('updates:action', 'loginToSteamNonConcurrent')
       setIsLoggedIn(true)
       toast({ title: 'Успех', description: 'Вход в Steam выполнен успешно' })
     } catch (error) {

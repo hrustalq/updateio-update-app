@@ -11,6 +11,7 @@ declare global {
       send(channel: string, ...args: unknown[]): void
       invoke<T = unknown>(channel: string, ...args: unknown[]): Promise<T>
     }
+    steamGuardResolver: (value: boolean | PromiseLike<boolean>) => void
   }
 }
 
