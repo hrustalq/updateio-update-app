@@ -8,7 +8,6 @@ import { QueueUpdateRequestPayload, UpdateRequestPayload } from '@shared/models'
 import { Worker } from 'worker_threads'
 import path from 'path'
 import fs from 'fs'
-import slash from 'slash'
 
 interface UpdateRequestWithCommand extends UpdateRequest {
   updateCommand: string
@@ -346,9 +345,18 @@ export class GameUpdateService {
         `
         const { workerData, parentPort } = require('worker_threads');
         const { spawn } = require('child_process');
+        const path = require('path');
         const { STEAMCMD_PATH, command } = workerData;
 
-        const steamcmd = spawn(STEAMCMD_PATH, command);
+        // Нормализуем пути в команде
+        const normalizedCommand = command.map(arg => {
+          if (arg.includes(':\\') || arg.startsWith('/')) {
+            return path.normalize(arg);
+          }
+          return arg;
+        });
+
+        const steamcmd = spawn(STEAMCMD_PATH, normalizedCommand);
 
         steamcmd.stdout.on('data', (data) => {
           parentPort.postMessage({ type: 'log', data: data.toString() });
@@ -395,15 +403,18 @@ export class GameUpdateService {
     })
   }
 
-  public async executeSteamCommand(appId: string, steamInstallDir: string): Promise<void> {
+  public async executeSteamCommand(appId: string, installDir: string): Promise<void> {
     try {
       const credentials = await prismaClient.steamSettings.findFirst()
       if (!credentials) {
         throw new Error('Steam credentials not found in the database')
       }
 
-      // Use single quotes around the path to handle spaces and special characters
-      const command = `+login ${credentials.username} +password ${credentials.password} +force_install_dir '${slash(path.normalize(steamInstallDir))}' +app_update ${appId} +quit`
+      // Используем path.normalize() для обработки пути установки
+      const normalizedInstallDir = path.normalize(installDir)
+
+      // Используем двойные кавычки вместо одинарных для обработки пробелов в пути
+      const command = `+login ${credentials.username} +password ${credentials.password} +force_install_dir "${normalizedInstallDir}" +app_update ${appId} +quit`
 
       const steamSettings = await this.getSteamSettings()
       if (!steamSettings) {
@@ -416,7 +427,7 @@ export class GameUpdateService {
     } catch (error) {
       logError('Error executing Steam command', error as Error, {
         appId,
-        steamInstallDir,
+        installDir,
         errorDetails: (error as Error).message
       })
       throw error
