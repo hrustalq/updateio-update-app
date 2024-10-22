@@ -7,10 +7,23 @@ import { gameUpdateService } from '@/services/gameUpdateService'
 export function setupUpdateHandlers(ipcMain: IpcMain): void {
   ipcMain.handle('updates:request', async (_, evt: UpdateRequestPayload) => {
     try {
+      const steamSettings = await gameUpdateService.getSteamSettings()
+      if (!steamSettings) {
+        throw new Error('Steam settings not found in the database')
+      }
+    } catch (error) {
+      logError('Failed to validate Steam credentials', error as Error, {
+        event: evt
+      })
+      throw error
+    }
+    try {
       const updateRequest = await gameUpdateService.requestUpdate(evt, userService.user!.id)
       return updateRequest
     } catch (error) {
-      logError('Failed to create update request', error as Error)
+      logError('Failed to create update request', error as Error, {
+        event: evt
+      })
       throw error
     }
   })

@@ -24,7 +24,8 @@ export function UpdateGameModal({ isOpen, onClose, gameId, appId }: UpdateGameMo
     data: settings,
     isLoading,
     isError,
-    error
+    error,
+    refetch
   } = $api.useQuery('get', '/api/settings', {
     params: {
       query: {
@@ -37,9 +38,16 @@ export function UpdateGameModal({ isOpen, onClose, gameId, appId }: UpdateGameMo
 
   useEffect(() => {
     if (isOpen) {
-      setStep('loading')
+      if (settings) {
+        // Если данные уже загружены, сразу переходим к шагу подтверждения
+        setStep('confirm')
+      } else {
+        // Если данных нет, начинаем загрузку
+        setStep('loading')
+        refetch()
+      }
     }
-  }, [isOpen])
+  }, [isOpen, settings, refetch])
 
   useEffect(() => {
     if (!isLoading && !isError && settings) {

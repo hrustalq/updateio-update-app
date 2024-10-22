@@ -15,10 +15,10 @@ export const ElectronProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         description: error.message,
         variant: 'destructive'
       })
-    } else {
+    } else if (error && typeof error === 'object' && 'message' in error) {
       toast({
         title: 'Error',
-        description: 'Произошла неизвестная ошибка',
+        description: `Ошибка при выполнении команды: \n ${error['message']}`,
         variant: 'destructive'
       })
       console.error(error)

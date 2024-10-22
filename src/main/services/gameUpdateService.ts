@@ -254,7 +254,16 @@ export class GameUpdateService {
       appId: updateRequest.appId,
       source: updateRequest.source
     })
-    await this.executeSteamCommand(updateRequest.updateCommand.split(' '))
+    const gameInstallDir = await prismaClient.gameInstallation.findFirst({
+      where: { externalGameId: updateRequest.gameId, externalAppId: updateRequest.appId },
+      select: { installPath: true }
+    })
+    if (!gameInstallDir) {
+      throw new Error(
+        `Game installation not found for game ${updateRequest.gameId} and app ${updateRequest.appId}`
+      )
+    }
+    await this.executeSteamCommand(updateRequest.updateCommand, gameInstallDir.installPath)
     await this.logUpdateProgress(
       updateRequest.id,
       `Update completed for game ${updateRequest.gameId}`
@@ -366,28 +375,50 @@ export class GameUpdateService {
             resolve()
           } else {
             const error = new Error(`SteamCMD exited with code ${message.code}`)
-            logError(`SteamCMD command failed: ${command.join(' ')}`, error)
+            logError(`SteamCMD command failed: ${command.join(' ')}`, error, {
+              exitCode: message.code,
+              command: command.join(' ')
+            })
             reject(error)
           }
         }
       })
 
       worker.on('error', (error) => {
-        logError(`Worker error: ${error.message}`, error)
+        logError(`Worker error: ${error.message}`, error, {
+          command: command.join(' '),
+          workerError: true
+        })
         reject(error)
       })
     })
   }
 
-  public async executeSteamCommand(command: string[]): Promise<void> {
-    const steamSettings = await this.getSteamSettings()
-    if (!steamSettings) {
-      throw new Error('Steam settings not found in the database')
+  public async executeSteamCommand(appId: string, steamInstallDir: string): Promise<void> {
+    try {
+      const credentials = await prismaClient.steamSettings.findFirst()
+      if (!credentials) {
+        throw new Error('Steam credentials not found in the database')
+      }
+
+      const command = `+login ${credentials.username} +password ${credentials.password} +force_install_dir ${steamInstallDir} +app_update ${appId} +quit`
+
+      const steamSettings = await this.getSteamSettings()
+      if (!steamSettings) {
+        throw new Error('Steam settings not found in the database')
+      }
+
+      const STEAMCMD_PATH = path.join(steamSettings.cmdPath, 'steamcmd.exe')
+
+      await this.executeSteamCommandInWorker(STEAMCMD_PATH, command.split(' '))
+    } catch (error) {
+      logError('Error executing Steam command', error as Error, {
+        appId,
+        steamInstallDir,
+        errorDetails: (error as Error).message
+      })
+      throw error
     }
-
-    const STEAMCMD_PATH = path.join(steamSettings.cmdPath, 'steamcmd.exe')
-
-    return this.executeSteamCommandInWorker(STEAMCMD_PATH, command)
   }
 
   public validateSteamCmd(cmdPath: string): boolean {

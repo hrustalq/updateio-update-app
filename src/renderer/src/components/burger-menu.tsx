@@ -115,7 +115,7 @@ export const BurgerMenu = () => {
         <SheetTitle hidden>Навигация</SheetTitle>
         <SheetDescription hidden>Навигация</SheetDescription>
         <SheetTrigger asChild>
-          <Button variant="ghost" size="icon" className="lg:hidden h-full size-10">
+          <Button variant="ghost" size="icon" className="sm:hidden h-full size-10">
             <Menu className="size-8" />
           </Button>
         </SheetTrigger>
@@ -222,7 +222,7 @@ export const BurgerMenu = () => {
       </Sheet>
 
       {/* Desktop menu */}
-      <nav className="hidden lg:flex lg:flex-1 max-w-full" aria-label="Главное меню">
+      <nav className="hidden sm:flex lg:flex-1 max-w-full" aria-label="Главное меню">
         <ul className="w-full flex justify-around" role="menubar">
           {menuItems.map((item) => (
             <li

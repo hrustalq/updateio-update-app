@@ -15,7 +15,6 @@ export function createWindow(): BrowserWindow {
     titleBarStyle: 'hidden',
     center: true,
     title: 'Updateio',
-    trafficLightPosition: { x: 15, y: 10 },
     vibrancy: 'under-window',
     visualEffectState: 'active',
     ...(process.platform === 'linux' ? { icon } : {}),
