@@ -401,7 +401,11 @@ export class GameUpdateService {
         throw new Error('Steam credentials not found in the database')
       }
 
-      const command = `+login ${credentials.username} +password ${credentials.password} +force_install_dir ${steamInstallDir} +app_update ${appId} +quit`
+      // Normalize the path to ensure correct formatting
+      const normalizedInstallDir = path.normalize(steamInstallDir)
+
+      // Use single quotes around the path to handle spaces and special characters
+      const command = `+login ${credentials.username} +password ${credentials.password} +force_install_dir '${normalizedInstallDir}' +app_update ${appId} +quit`
 
       const steamSettings = await this.getSteamSettings()
       if (!steamSettings) {
