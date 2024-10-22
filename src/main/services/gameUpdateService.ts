@@ -8,6 +8,7 @@ import { QueueUpdateRequestPayload, UpdateRequestPayload } from '@shared/models'
 import { Worker } from 'worker_threads'
 import path from 'path'
 import fs from 'fs'
+import slash from 'slash'
 
 interface UpdateRequestWithCommand extends UpdateRequest {
   updateCommand: string
@@ -401,11 +402,8 @@ export class GameUpdateService {
         throw new Error('Steam credentials not found in the database')
       }
 
-      // Normalize the path to ensure correct formatting
-      const normalizedInstallDir = path.normalize(steamInstallDir)
-
       // Use single quotes around the path to handle spaces and special characters
-      const command = `+login ${credentials.username} +password ${credentials.password} +force_install_dir '${normalizedInstallDir}' +app_update ${appId} +quit`
+      const command = `+login ${credentials.username} +password ${credentials.password} +force_install_dir '${slash(path.normalize(steamInstallDir))}' +app_update ${appId} +quit`
 
       const steamSettings = await this.getSteamSettings()
       if (!steamSettings) {
