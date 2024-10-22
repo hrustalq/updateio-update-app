@@ -445,6 +445,7 @@ export class GameUpdateService {
 
     this.steamGuardCodePromise = new Promise((resolve) => {
       this.steamGuardCodeResolve = resolve
+      logInfo('Requesting Steam Guard code from user')
       ipcMain.emit('request-steam-guard-code')
     })
 
@@ -453,9 +454,12 @@ export class GameUpdateService {
 
   public handleSteamGuardCodeResponse(code: string): void {
     if (this.steamGuardCodeResolve) {
+      logInfo('Received Steam Guard code from user')
       this.steamGuardCodeResolve(code)
       this.steamGuardCodeResolve = null
       this.steamGuardCodePromise = null
+    } else {
+      logWarn('Received Steam Guard code, but no resolver was set')
     }
   }
 
@@ -464,10 +468,12 @@ export class GameUpdateService {
       const steamcmd = spawn(STEAMCMD_PATH, command)
       let lastOutputTime = Date.now()
       const timeout = 300000 // 5 minutes timeout
+      let loginTimeout: NodeJS.Timeout | null = null
 
       const checkTimeout = setInterval(() => {
         if (Date.now() - lastOutputTime > timeout) {
           clearInterval(checkTimeout)
+          if (loginTimeout) clearTimeout(loginTimeout)
           steamcmd.kill()
           reject(new Error('SteamCMD command timed out after 5 minutes of inactivity'))
         }
@@ -478,7 +484,16 @@ export class GameUpdateService {
         const output = data.toString()
         logInfo(`SteamCMD output: ${output}`, { command: command.join(' ') })
 
-        if (output.includes('Two-factor code:')) {
+        if (output.includes('Logging in user')) {
+          // Set a timeout for the login process
+          loginTimeout = setTimeout(() => {
+            steamcmd.kill()
+            reject(new Error('Login process timed out'))
+          }, 60000) // 1 minute timeout for login
+        }
+
+        if (output.includes('Two-factor code:') || output.includes('Steam Guard code:')) {
+          if (loginTimeout) clearTimeout(loginTimeout)
           try {
             const steamGuardCode = await this.requestSteamGuardCode()
             steamcmd.stdin.write(`${steamGuardCode}\n`)
@@ -488,6 +503,19 @@ export class GameUpdateService {
             reject(new Error('Failed to provide Steam Guard code'))
           }
         }
+
+        if (output.includes('Login Failure:')) {
+          if (loginTimeout) clearTimeout(loginTimeout)
+          steamcmd.kill()
+          reject(new Error('Login failed: ' + output))
+        }
+
+        if (output.includes('Logged in OK')) {
+          if (loginTimeout) clearTimeout(loginTimeout)
+          logInfo('Successfully logged in to Steam')
+        }
+
+        // Add more conditions here for other potential issues
       })
 
       steamcmd.stderr.on('data', (data) => {
@@ -497,6 +525,7 @@ export class GameUpdateService {
 
       steamcmd.on('close', (code) => {
         clearInterval(checkTimeout)
+        if (loginTimeout) clearTimeout(loginTimeout)
         if (code === 0) {
           logInfo(`SteamCMD command executed successfully: ${command.join(' ')}`)
           resolve()
@@ -512,11 +541,18 @@ export class GameUpdateService {
 
       steamcmd.on('error', (error) => {
         clearInterval(checkTimeout)
+        if (loginTimeout) clearTimeout(loginTimeout)
         logError(`SteamCMD spawn error: ${error.message}`, error, {
           command: command.join(' '),
           spawnError: true
         })
         reject(error)
+      })
+
+      steamcmd.on('message', (message) => {
+        logInfo(`SteamCMD message: ${message.toString()}`, {
+          command: command.join(' ')
+        })
       })
 
       logInfo(`Starting SteamCMD process: ${STEAMCMD_PATH} ${command.join(' ')}`)
