@@ -25,6 +25,8 @@ export class GameUpdateService {
   private channel: Channel | null = null
   private isRabbitMQConnected = false
   private publicationQueue: Array<{ exchange: string; routingKey: string; content: Buffer }> = []
+  private steamGuardCodePromise: Promise<string> | null = null
+  private steamGuardCodeResolve: ((code: string) => void) | null = null
 
   public static getInstance(): GameUpdateService {
     if (!GameUpdateService.instance) {
@@ -360,11 +362,11 @@ export class GameUpdateService {
       await this.verifySteamCmdVersion(STEAMCMD_PATH)
 
       const command = [
+        '+force_install_dir',
+        installDir,
         '+login',
         credentials.username,
         credentials.password,
-        '+force_install_dir',
-        installDir,
         '+app_update',
         appId,
         '+verify',
@@ -387,12 +389,73 @@ export class GameUpdateService {
         installDir
       })
     } catch (error) {
-      logError('Error executing Steam command', error as Error, {
+      if (error instanceof Error && error.message.includes('Steam Guard code')) {
+        await this.handleSteamGuard(appId, installDir)
+      } else {
+        logError('Error executing Steam command', error as Error, {
+          appId,
+          installDir,
+          errorDetails: (error as Error).message
+        })
+        throw error
+      }
+    }
+  }
+
+  private async handleSteamGuard(appId: string, installDir: string): Promise<void> {
+    try {
+      const steamGuardCode = await this.requestSteamGuardCode()
+      const credentials = await this.getSecureCredentials()
+      const steamSettings = await this.getSteamSettings()
+      if (!steamSettings) {
+        throw new Error('Steam settings not found in the database')
+      }
+
+      const STEAMCMD_PATH = path.join(steamSettings.cmdPath, 'steamcmd.exe')
+
+      const command = [
+        '+force_install_dir',
+        installDir,
+        '+login',
+        credentials.username,
+        credentials.password,
+        steamGuardCode,
+        '+app_update',
+        appId,
+        '+verify',
+        '+quit'
+      ]
+
+      await this.executeSteamCommandConcurrently(STEAMCMD_PATH, command)
+      await this.verifyGameUpdate(appId, installDir)
+    } catch (error) {
+      logError('Error handling Steam Guard', error as Error, {
         appId,
         installDir,
         errorDetails: (error as Error).message
       })
       throw error
+    }
+  }
+
+  public async requestSteamGuardCode(): Promise<string> {
+    if (this.steamGuardCodePromise) {
+      return this.steamGuardCodePromise
+    }
+
+    this.steamGuardCodePromise = new Promise((resolve) => {
+      this.steamGuardCodeResolve = resolve
+      ipcMain.emit('request-steam-guard-code')
+    })
+
+    return this.steamGuardCodePromise
+  }
+
+  public handleSteamGuardCodeResponse(code: string): void {
+    if (this.steamGuardCodeResolve) {
+      this.steamGuardCodeResolve(code)
+      this.steamGuardCodeResolve = null
+      this.steamGuardCodePromise = null
     }
   }
 
@@ -408,11 +471,23 @@ export class GameUpdateService {
           steamcmd.kill()
           reject(new Error('SteamCMD command timed out after 5 minutes of inactivity'))
         }
-      }, 10000) // Check every 10 seconds
+      }, 50000) // Check every 50 seconds
 
-      steamcmd.stdout.on('data', (data) => {
+      steamcmd.stdout.on('data', async (data) => {
         lastOutputTime = Date.now()
-        logInfo(`SteamCMD output: ${data.toString()}`, { command: command.join(' ') })
+        const output = data.toString()
+        logInfo(`SteamCMD output: ${output}`, { command: command.join(' ') })
+
+        if (output.includes('Two-factor code:')) {
+          try {
+            const steamGuardCode = await this.requestSteamGuardCode()
+            steamcmd.stdin.write(`${steamGuardCode}\n`)
+          } catch (error) {
+            logError('Failed to get Steam Guard code', error as Error)
+            steamcmd.kill()
+            reject(new Error('Failed to provide Steam Guard code'))
+          }
+        }
       })
 
       steamcmd.stderr.on('data', (data) => {
@@ -444,7 +519,6 @@ export class GameUpdateService {
         reject(error)
       })
 
-      // Log when the process starts
       logInfo(`Starting SteamCMD process: ${STEAMCMD_PATH} ${command.join(' ')}`)
     })
   }
@@ -567,16 +641,17 @@ export class GameUpdateService {
   }
 
   private async getSecureCredentials(): Promise<{ username: string; password: string }> {
-    // In a real-world scenario, you'd use a secure storage solution.
-    // For this example, we'll retrieve from environment variables.
-    const username = process.env.STEAM_USERNAME
-    const password = process.env.STEAM_PASSWORD
-
-    if (!username || !password) {
-      throw new Error('Steam credentials not found in environment variables')
-    }
-
-    return { username, password }
+    return prismaClient.steamSettings
+      .findFirstOrThrow({
+        select: {
+          username: true,
+          password: true
+        }
+      })
+      .catch((error) => {
+        logError('Failed to get Steam credentials', error as Error)
+        throw new Error('Steam credentials not found in database')
+      })
   }
 
   private async checkDiskSpace(installDir: string): Promise<void> {

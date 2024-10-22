@@ -36,6 +36,10 @@ export function setupUpdateHandlers(ipcMain: IpcMain): void {
         case 'validateSteamCmd':
           return gameUpdateService.validateSteamCmd(payload)
 
+        case 'requestSteamGuardCode':
+          gameUpdateService.requestSteamGuardCode()
+          return
+
         default:
           throw new Error(`Unknown action: ${action}`)
       }
@@ -43,5 +47,10 @@ export function setupUpdateHandlers(ipcMain: IpcMain): void {
       logError(`Failed to process action: ${action}`, error as Error, { action, payload })
       throw error
     }
+  })
+
+  // Добавляем новый обработчик для Steam Guard кода
+  ipcMain.on('steam-guard-code-response', (_event, code) => {
+    gameUpdateService.handleSteamGuardCodeResponse(code)
   })
 }

@@ -5,6 +5,9 @@ const api = {
   on: (channel: string, func: (...args: unknown[]) => void) => {
     ipcRenderer.on(channel, (_event, ...args) => func(...args))
   },
+  off: (channel: string, func: (...args: unknown[]) => void) => {
+    ipcRenderer.removeListener(channel, (_event, ...args) => func(...args))
+  },
   send: (channel: string, data: unknown) => {
     ipcRenderer.send(channel, data)
   },

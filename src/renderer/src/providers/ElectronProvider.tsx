@@ -1,35 +1,69 @@
-import React, { createContext, useCallback, useContext, useMemo } from 'react'
+import React, { createContext, useCallback, useContext, useMemo, useState, useEffect } from 'react'
 import { useToast } from '@renderer/components/ui/toast/use-toast'
+import { SteamGuardModal } from '@renderer/components/steam-guard-modal'
 
 type ElectronContextType = typeof window.api
 
 const ElectronContext = createContext<ElectronContextType | null>(null)
 
-export const ElectronProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { toast } = useToast()
+interface ElectronProviderProps {
+  children: React.ReactNode
+}
 
-  const handleError = useCallback((error: Error | unknown): void => {
-    if (error instanceof Error) {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive'
-      })
-    } else if (error && typeof error === 'object' && 'message' in error) {
-      toast({
-        title: 'Error',
-        description: `Ошибка при выполнении команды: \n ${error['message']}`,
-        variant: 'destructive'
-      })
-      console.error(error)
+export const ElectronProvider: React.FC<ElectronProviderProps> = ({ children }) => {
+  const { toast } = useToast()
+  const [isSteamGuardModalOpen, setIsSteamGuardModalOpen] = useState(false)
+
+  const handleError = useCallback(
+    (error: Error | unknown): void => {
+      if (error instanceof Error) {
+        toast({
+          title: 'Error',
+          description: error.message,
+          variant: 'destructive'
+        })
+      } else if (error && typeof error === 'object' && 'message' in error) {
+        toast({
+          title: 'Error',
+          description: `Ошибка при выполнении команды: \n ${(error as { message: string }).message}`,
+          variant: 'destructive'
+        })
+        console.error(error)
+      }
+    },
+    [toast]
+  )
+
+  useEffect(() => {
+    window.api.on('error:log', handleError)
+    return () => {
+      window.api.off('error:log', handleError)
+    }
+  }, [handleError])
+
+  const value: ElectronContextType = useMemo(() => window.api, [])
+
+  useEffect(() => {
+    const handleSteamGuardRequest = () => {
+      setIsSteamGuardModalOpen(true)
+    }
+
+    window.api.on('request-steam-guard-code', handleSteamGuardRequest)
+
+    return () => {
+      window.api.off('request-steam-guard-code', handleSteamGuardRequest)
     }
   }, [])
 
-  window.api.on('error:log', handleError)
-
-  const value: ElectronContextType = useMemo(() => window.api, [window.api])
-
-  return <ElectronContext.Provider value={value}>{children}</ElectronContext.Provider>
+  return (
+    <ElectronContext.Provider value={value}>
+      {children}
+      <SteamGuardModal
+        isOpen={isSteamGuardModalOpen}
+        onClose={() => setIsSteamGuardModalOpen(false)}
+      />
+    </ElectronContext.Provider>
+  )
 }
 
 export const useElectron = () => {

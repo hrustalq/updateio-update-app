@@ -1,16 +1,15 @@
-import { ElectronAPI } from '@electron-toolkit/preload'
-
 type IpcRendererEvent = Electron.IpcRendererEvent
 
 declare global {
   interface Window {
     api: {
-      on(channel: string, func: (event: IpcRendererEvent, ...args: any[]) => void): void
-      once(channel: string, func: (event: IpcRendererEvent, ...args: any[]) => void): void
-      removeListener(channel: string, func: (...args: any[]) => void): void
+      on(channel: string, func: (event: IpcRendererEvent, ...args: unknown[]) => void): void
+      off(channel: string, func: (event: IpcRendererEvent, ...args: unknown[]) => void): void
+      once(channel: string, func: (event: IpcRendererEvent, ...args: unknown[]) => void): void
+      removeListener(channel: string, func: (...args: unknown[]) => void): void
       removeAllListeners(channel: string): void
-      send(channel: string, ...args: any[]): void
-      invoke<T = any>(channel: string, ...args: any[]): Promise<T>
+      send(channel: string, ...args: unknown[]): void
+      invoke<T = unknown>(channel: string, ...args: unknown[]): Promise<T>
     }
   }
 }
