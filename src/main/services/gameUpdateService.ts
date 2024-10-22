@@ -345,8 +345,80 @@ export class GameUpdateService {
 
   // Steam-related methods
 
+  public async loginToSteam(): Promise<void> {
+    const credentials = await this.getSecureCredentials()
+    const steamSettings = await this.getSteamSettings()
+    if (!steamSettings) {
+      throw new Error('Steam settings not found in the database')
+    }
+
+    const STEAMCMD_PATH = path.join(steamSettings.cmdPath, 'steamcmd.exe')
+
+    const command = ['+login', credentials.username, '+password', credentials.password, '+quit']
+
+    try {
+      await this.executeSteamCommandConcurrently(STEAMCMD_PATH, command)
+      logInfo('Successfully logged in to Steam')
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Steam Guard code')) {
+        const steamGuardCode = await this.requestSteamGuardCode()
+        await this.loginWithSteamGuard(credentials.username, credentials.password, steamGuardCode)
+      } else {
+        logError('Failed to log in to Steam', error as Error)
+        throw new Error('Failed to log in to Steam')
+      }
+    }
+  }
+
+  public async loginWithSteamGuard(
+    username: string,
+    password: string,
+    steamGuardCode: string
+  ): Promise<void> {
+    const steamSettings = await this.getSteamSettings()
+    if (!steamSettings) {
+      throw new Error('Steam settings not found in the database')
+    }
+
+    const STEAMCMD_PATH = path.join(steamSettings.cmdPath, 'steamcmd.exe')
+
+    const command = ['+login', username, password, steamGuardCode, '+quit']
+
+    try {
+      await this.executeSteamCommandConcurrently(STEAMCMD_PATH, command)
+      logInfo('Successfully logged in to Steam with Steam Guard')
+    } catch (error) {
+      logError('Failed to log in to Steam with Steam Guard', error as Error)
+      throw new Error('Failed to log in to Steam with Steam Guard')
+    }
+  }
+
+  public async checkSteamLoginStatus(): Promise<boolean> {
+    const steamSettings = await this.getSteamSettings()
+    if (!steamSettings) {
+      return false
+    }
+
+    const STEAMCMD_PATH = path.join(steamSettings.cmdPath, 'steamcmd.exe')
+
+    const command = ['+login', '+quit']
+
+    try {
+      await this.executeSteamCommandConcurrently(STEAMCMD_PATH, command)
+      return true
+    } catch (error) {
+      logWarn('Not logged in to Steam', { service: 'GameUpdateService', error })
+      return false
+    }
+  }
+
   private async executeSteamCommand(appId: string, installDir: string): Promise<void> {
     try {
+      const isLoggedIn = await this.checkSteamLoginStatus()
+      if (!isLoggedIn) {
+        await this.loginToSteam()
+      }
+
       const credentials = await this.getSecureCredentials()
       const steamSettings = await this.getSteamSettings()
       if (!steamSettings) {
@@ -389,20 +461,12 @@ export class GameUpdateService {
         installDir
       })
     } catch (error) {
-      if (error instanceof Error && error.message.includes('Steam Guard code')) {
-        await this.handleSteamGuard(appId, installDir)
-      } else {
-        logError('Error executing Steam command', error as Error, {
-          appId,
-          installDir,
-          errorDetails: (error as Error).message
-        })
-        throw error
-      }
+      logError('Error executing Steam command', error as Error)
+      throw error
     }
   }
 
-  private async handleSteamGuard(appId: string, installDir: string): Promise<void> {
+  public async handleSteamGuard(appId: string, installDir: string): Promise<void> {
     try {
       const steamGuardCode = await this.requestSteamGuardCode()
       const credentials = await this.getSecureCredentials()
@@ -560,8 +624,33 @@ export class GameUpdateService {
   }
 
   public validateSteamCmd(cmdPath: string): boolean {
-    const steamCmdPath = path.join(cmdPath, 'steamcmd.exe')
-    return fs.existsSync(steamCmdPath)
+    let steamCmdExecutable: string
+
+    switch (process.platform) {
+      case 'win32':
+        steamCmdExecutable = 'steamcmd.exe'
+        break
+      case 'darwin':
+        steamCmdExecutable = 'steamcmd.sh'
+        break
+      case 'linux':
+        steamCmdExecutable = 'steamcmd.sh'
+        break
+      default:
+        logError(`Unsupported platform: ${process.platform}`, new Error('Unsupported platform'))
+        return false
+    }
+
+    const steamCmdPath = path.join(cmdPath, steamCmdExecutable)
+    const exists = fs.existsSync(steamCmdPath)
+
+    if (!exists) {
+      logWarn(`SteamCMD not found at path: ${steamCmdPath}`, { service: 'GameUpdateService' })
+    } else {
+      logInfo(`SteamCMD found at path: ${steamCmdPath}`, { service: 'GameUpdateService' })
+    }
+
+    return exists
   }
 
   public async getSteamSettings(): Promise<SteamSettings | null> {

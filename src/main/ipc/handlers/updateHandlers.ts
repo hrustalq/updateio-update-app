@@ -37,8 +37,21 @@ export function setupUpdateHandlers(ipcMain: IpcMain): void {
           return gameUpdateService.validateSteamCmd(payload)
 
         case 'requestSteamGuardCode':
-          gameUpdateService.requestSteamGuardCode()
-          return
+          return await gameUpdateService.requestSteamGuardCode()
+
+        // New handlers for Steam login
+        case 'checkSteamLoginStatus':
+          return await gameUpdateService.checkSteamLoginStatus()
+
+        case 'loginToSteam':
+          return await gameUpdateService.loginToSteam()
+
+        case 'loginWithSteamGuard':
+          return await gameUpdateService.loginWithSteamGuard(
+            payload.username,
+            payload.password,
+            payload.steamGuardCode
+          )
 
         default:
           throw new Error(`Unknown action: ${action}`)

@@ -55,11 +55,16 @@ export const ElectronProvider: React.FC<ElectronProviderProps> = ({ children }) 
     }
   }, [])
 
+  const handleSteamGuardSubmit = (code: string) => {
+    window.api.invoke('updates:action', 'loginWithSteamGuard', code)
+  }
+
   return (
     <ElectronContext.Provider value={value}>
       {children}
       <SteamGuardModal
         isOpen={isSteamGuardModalOpen}
+        onSubmit={handleSteamGuardSubmit}
         onClose={() => setIsSteamGuardModalOpen(false)}
       />
     </ElectronContext.Provider>
