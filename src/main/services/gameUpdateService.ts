@@ -345,18 +345,9 @@ export class GameUpdateService {
         `
         const { workerData, parentPort } = require('worker_threads');
         const { spawn } = require('child_process');
-        const path = require('path');
         const { STEAMCMD_PATH, command } = workerData;
 
-        // Нормализуем пути в команде
-        const normalizedCommand = command.map(arg => {
-          if (arg.includes(':\\') || arg.startsWith('/')) {
-            return path.normalize(arg);
-          }
-          return arg;
-        });
-
-        const steamcmd = spawn(STEAMCMD_PATH, normalizedCommand);
+        const steamcmd = spawn(STEAMCMD_PATH, command);
 
         steamcmd.stdout.on('data', (data) => {
           parentPort.postMessage({ type: 'log', data: data.toString() });
@@ -410,11 +401,8 @@ export class GameUpdateService {
         throw new Error('Steam credentials not found in the database')
       }
 
-      // Используем path.normalize() для обработки пути установки
-      const normalizedInstallDir = path.normalize(installDir)
-
-      // Используем двойные кавычки вместо одинарных для обработки пробелов в пути
-      const command = `+login ${credentials.username} +password ${credentials.password} +force_install_dir "${normalizedInstallDir}" +app_update ${appId} +quit`
+      // Use single quotes around the path to handle spaces and special characters
+      const command = `+login ${credentials.username} +password ${credentials.password} +app_update ${appId} +quit`
 
       const steamSettings = await this.getSteamSettings()
       if (!steamSettings) {
