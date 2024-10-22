@@ -31,7 +31,7 @@ export function SteamSettings() {
   const { data: settings, isLoading } = useQuery({
     queryKey: ['steamSettings'],
     queryFn: async () => {
-      return await invoke<SteamSettingsForm>('steam:getSettings')
+      return await invoke<SteamSettingsForm>('updates:action', 'getSteamSettings')
     }
   })
 
