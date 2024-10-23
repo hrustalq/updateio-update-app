@@ -176,6 +176,7 @@ export function SteamSettings() {
         </div>
       )}
       <SteamGuardModal
+        isLoading={updateMutation.isPending}
         isOpen={showSteamGuardModal}
         onClose={() => setShowSteamGuardModal(false)}
         onSubmit={handleSteamGuardSubmit}

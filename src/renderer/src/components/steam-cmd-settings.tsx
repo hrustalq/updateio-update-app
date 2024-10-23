@@ -7,6 +7,7 @@ import { Label } from '@renderer/components/ui/label'
 import { useToast } from '@renderer/components/ui/toast/use-toast'
 import { Skeleton } from '@renderer/components/ui/skeleton'
 import { useElectron } from '@renderer/providers/ElectronProvider'
+import { FolderOpen } from 'lucide-react'
 
 interface SteamCmdSettingsForm {
   cmdPath: string
@@ -71,6 +72,22 @@ export function SteamCmdSettings() {
     updateMutation.mutate(data)
   }
 
+  const openFolderDialog = async () => {
+    try {
+      const selectedPath = await invoke<string>('dialog:openFolder')
+      if (selectedPath) {
+        setValue('cmdPath', selectedPath, { shouldDirty: true })
+      }
+    } catch (error) {
+      console.error('Failed to open folder dialog:', error)
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось открыть диалог выбора папки',
+        variant: 'destructive'
+      })
+    }
+  }
+
   if (isLoading) {
     return <Skeleton className="w-full h-32" />
   }
@@ -79,12 +96,25 @@ export function SteamCmdSettings() {
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="cmdPath">Путь к SteamCMD</Label>
-        <Input
-          id="cmdPath"
-          {...register('cmdPath', {
-            required: 'Путь к SteamCMD обязателен'
-          })}
-        />
+        <div className="flex items-center">
+          <Input
+            id="cmdPath"
+            {...register('cmdPath', {
+              required: 'Путь к SteamCMD обязателен'
+            })}
+            className="flex-grow mr-2"
+          />
+          <Button
+            onClick={openFolderDialog}
+            size="lg"
+            className="px-4"
+            variant="outline"
+            type="button"
+          >
+            <FolderOpen className="h-4 w-4 mr-2" />
+            Выбрать
+          </Button>
+        </div>
         {errors.cmdPath && (
           <p className="text-destructive text-sm mt-1">{errors.cmdPath.message}</p>
         )}

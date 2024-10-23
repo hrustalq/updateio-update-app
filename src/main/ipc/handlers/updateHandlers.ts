@@ -45,17 +45,16 @@ export function setupUpdateHandlers(ipcMain: IpcMain): void {
           return await gameUpdateService.checkSteamLoginStatus()
 
         case 'loginToSteam':
-          return await gameUpdateService.loginToSteam(
-            payload.username,
-            payload.password,
-            payload.steamGuardCode
-          )
+          return await gameUpdateService.loginToSteam(payload.username, payload.password)
 
         case 'submitSteamGuardCode':
-          return await gameUpdateService.submitSteamGuardCode(payload)
+          return await gameUpdateService.submitSteamGuardCode(payload.code)
 
         case 'loginToSteamNonConcurrent':
           return await gameUpdateService.loginToSteamNonConcurrent()
+
+        case 'updateSteamCmdPath':
+          return await gameUpdateService.updateSteamCmdPath(payload)
 
         default:
           throw new Error(`Unknown action: ${action}`)

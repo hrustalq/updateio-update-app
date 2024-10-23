@@ -31,6 +31,8 @@ export class GameUpdateService {
   private steamGuardCodePromise: Promise<string> | null = null
   private steamGuardCodeResolve: ((code: string) => void) | null = null
   private currentSteamCmdProcess: ReturnType<typeof spawn> | null = null
+  private pendingUsername: string | null = null
+  private pendingPassword: string | null = null
 
   public static getInstance(): GameUpdateService {
     if (!GameUpdateService.instance) {
@@ -351,88 +353,139 @@ export class GameUpdateService {
 
   public async loginToSteam(
     username: string,
-    password: string,
-    steamGuardCode?: string
-  ): Promise<{ output: string[]; needsSteamGuard: boolean }> {
-    const settings = await this.getSteamSettings()
-    if (!settings || !settings.cmdPath) {
-      throw new Error('SteamCMD path is not set')
+    password: string
+  ): Promise<{ needsSteamGuard: boolean }> {
+    try {
+      const settings = await this.getSteamSettings()
+      if (!settings || !settings.cmdPath) {
+        throw new Error('SteamCMD path is not set')
+      }
+
+      const STEAMCMD_PATH = this.getSteamCmdPath(settings.cmdPath)
+      const command = ['+login', username, password, '+quit']
+
+      this.pendingUsername = username
+      this.pendingPassword = password
+
+      const result = await this.executeSteamCommandWithSteamGuard(STEAMCMD_PATH, command)
+      
+      if (!result.needsSteamGuard) {
+        // Если Steam Guard не требуется, сразу обновляем настройки
+        await this.updateSteamSettings({ username, password })
+      }
+
+      return { needsSteamGuard: result.needsSteamGuard }
+    } catch (error) {
+      logError('Failed to login to Steam', error as Error)
+      throw error
     }
+  }
 
-    const STEAMCMD_PATH = this.getSteamCmdPath(settings.cmdPath)
-    const command = ['+login', username, password]
+  public async submitSteamGuardCode(code: string): Promise<void> {
+    try {
+      if (!this.currentSteamCmdProcess) {
+        throw new Error('No active SteamCMD process')
+      }
 
-    if (steamGuardCode) {
-      command.push(steamGuardCode)
+      logInfo('Submitting Steam Guard code...')
+      const result = await this.handleSteamGuardInput(code)
+      logInfo(`Steam Guard input result: ${JSON.stringify(result)}`)
+
+      if (result.success) {
+        logInfo('Steam Guard authentication successful, updating settings...')
+        await this.updateSteamSettings({
+          username: this.pendingUsername!,
+          password: this.pendingPassword!
+        })
+        this.pendingUsername = null
+        this.pendingPassword = null
+      } else {
+        throw new Error('Failed to authenticate with Steam Guard')
+      }
+    } catch (error) {
+      logError('Failed to submit Steam Guard code', error as Error)
+      throw error
     }
+  }
 
-    command.push('+quit')
-
+  private async executeSteamCommandWithSteamGuard(
+    STEAMCMD_PATH: string,
+    command: string[]
+  ): Promise<{ needsSteamGuard: boolean }> {
     return new Promise((resolve, reject) => {
-      const steamcmd =
-        process.platform === 'win32'
-          ? spawn(STEAMCMD_PATH, command)
-          : spawn('sh', [STEAMCMD_PATH, ...command])
-      let output: string[] = []
+      this.currentSteamCmdProcess = spawn(STEAMCMD_PATH, command)
       let needsSteamGuard = false
+      let buffer = ''
 
       const handleOutput = (data: Buffer) => {
-        const lines = data.toString().split('\n')
-        output = [...output, ...lines]
+        buffer += data.toString()
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
 
-        if (data.toString().includes('Steam Guard code:')) {
-          needsSteamGuard = true
-          steamcmd.stdin.cork()
-          resolve({ output, needsSteamGuard })
+        for (const line of lines) {
+          logInfo(`SteamCMD output: ${line}`)
+
+          if (line.includes('Steam Guard code:') || line.includes('Two-factor code:')) {
+            needsSteamGuard = true
+            this.currentSteamCmdProcess?.stdin?.cork()
+            resolve({ needsSteamGuard: true })
+          } else if (line.includes('Login Failure: Invalid Password')) {
+            reject(new Error('Invalid Steam credentials'))
+          } else if (line.includes('Logged in OK')) {
+            resolve({ needsSteamGuard: false })
+          }
         }
       }
 
-      steamcmd.stdout.on('data', handleOutput)
-      steamcmd.stderr.on('data', handleOutput)
+      this.currentSteamCmdProcess.stdout.on('data', handleOutput)
+      this.currentSteamCmdProcess.stderr.on('data', handleOutput)
 
-      steamcmd.on('close', (code) => {
-        if (code === 0) {
-          resolve({ output, needsSteamGuard })
-        } else {
+      this.currentSteamCmdProcess.on('close', (code) => {
+        if (code !== 0 && !needsSteamGuard) {
           reject(new Error(`SteamCMD exited with code ${code}`))
         }
       })
 
-      steamcmd.on('error', (error) => {
+      this.currentSteamCmdProcess.on('error', (error) => {
         reject(error)
       })
     })
   }
 
-  public async submitSteamGuardCode(code: string): Promise<{ output: string[]; success: boolean }> {
-    return new Promise((resolve, reject) => {
+  private async handleSteamGuardInput(code: string): Promise<{ success: boolean }> {
+    return new Promise((resolve) => {
       if (!this.currentSteamCmdProcess) {
-        reject(new Error('No active SteamCMD process'))
+        resolve({ success: false })
         return
       }
 
-      this.currentSteamCmdProcess?.stdin?.write(`${code}\n`)
-      this.currentSteamCmdProcess?.stdin?.uncork()
+      this.currentSteamCmdProcess.stdin?.write(`${code}\n`)
+      this.currentSteamCmdProcess.stdin?.uncork()
 
-      let output: string[] = []
-      let success = false
-
+      let buffer = ''
       const handleOutput = (data: Buffer) => {
-        const lines = data.toString().split('\n')
-        output = [...output, ...lines]
+        buffer += data.toString()
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
 
-        if (data.toString().includes('Logged in OK')) {
-          success = true
-          this.currentSteamCmdProcess?.kill()
-          resolve({ output, success })
+        for (const line of lines) {
+          logInfo(`SteamCMD output: ${line}`)
+
+          if (line.includes('Logged in OK')) {
+            this.currentSteamCmdProcess?.kill()
+            resolve({ success: true })
+          } else if (line.includes('Invalid Steam Guard code')) {
+            this.currentSteamCmdProcess?.kill()
+            resolve({ success: false })
+          }
         }
       }
 
       this.currentSteamCmdProcess?.stdout?.on('data', handleOutput)
       this.currentSteamCmdProcess?.stderr?.on('data', handleOutput)
 
-      this.currentSteamCmdProcess.on('close', () => {
-        resolve({ output, success })
+      this.currentSteamCmdProcess?.on('close', () => {
+        resolve({ success: false })
       })
     })
   }
@@ -464,11 +517,7 @@ export class GameUpdateService {
         if (!steamSettings) {
           throw new Error('Steam settings not found')
         }
-        await this.loginToSteam(
-          steamSettings.username,
-          steamSettings.password,
-          steamSettings.cmdPath
-        )
+        await this.loginToSteam(steamSettings.username, steamSettings.password)
       }
 
       const credentials = await this.getSecureCredentials()
@@ -802,7 +851,7 @@ export class GameUpdateService {
       update: {
         username: settings.username,
         password: settings.password,
-        // Сохраняем текущий cmdPath, если он н�� предоставлен в новых настройках
+        // Сохраняем текущий cmdPath, если он н предоставлен в новых настройках
         cmdPath: currentSettings?.cmdPath || ''
       },
       create: {
@@ -1015,78 +1064,6 @@ export class GameUpdateService {
     }
   }
 
-  public async executeSteamCommandWithSteamGuard(
-    STEAMCMD_PATH: string,
-    command: string[],
-    password: string,
-    initialSteamGuardCode: string
-  ): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const steamcmd = spawn(STEAMCMD_PATH, command)
-      let buffer = ''
-      let steamGuardCodeUsed = false
-
-      const handleOutput = async (data: Buffer) => {
-        buffer += data.toString()
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          logInfo(`SteamCMD output: ${line}`)
-
-          if (line.includes('Steam Guard code:')) {
-            if (!steamGuardCodeUsed) {
-              steamcmd.stdin.write(`${initialSteamGuardCode}\n`)
-              steamGuardCodeUsed = true
-            } else {
-              try {
-                const newSteamGuardCode = await this.requestSteamGuardCode()
-                steamcmd.stdin.write(`${newSteamGuardCode}\n`)
-              } catch (error) {
-                logError('Failed to get Steam Guard code', error as Error)
-                steamcmd.kill()
-                reject(new Error('Failed to provide Steam Guard code'))
-              }
-            }
-          } else if (line.includes('Password:')) {
-            steamcmd.stdin.write(`${password}\n`)
-          } else if (line.includes('FAILED login with result code')) {
-            reject(new Error('Login failed: ' + line))
-          } else if (line.includes('Logged in OK')) {
-            logInfo('Successfully logged in to Steam')
-          }
-        }
-      }
-
-      steamcmd.stdout.on('data', handleOutput)
-      steamcmd.stderr.on('data', handleOutput)
-
-      steamcmd.on('close', (code) => {
-        if (code === 0) {
-          logInfo(`SteamCMD command executed successfully: ${command.join(' ')}`)
-          resolve()
-        } else {
-          const error = new Error(`SteamCMD exited with code ${code}`)
-          logError(`SteamCMD command failed: ${command.join(' ')}`, error, {
-            exitCode: code,
-            command: command.join(' ')
-          })
-          reject(error)
-        }
-      })
-
-      steamcmd.on('error', (error) => {
-        logError(`SteamCMD spawn error: ${error.message}`, error, {
-          command: command.join(' '),
-          spawnError: true
-        })
-        reject(error)
-      })
-
-      logInfo(`Starting SteamCMD process: ${STEAMCMD_PATH} ${command.join(' ')}`)
-    })
-  }
-
   private getSteamCmdPath(cmdPath: string): string {
     switch (process.platform) {
       case 'win32':
@@ -1096,6 +1073,23 @@ export class GameUpdateService {
         return path.join(cmdPath, 'steamcmd.sh')
       default:
         throw new Error(`Unsupported platform: ${process.platform}`)
+    }
+  }
+
+  public async updateSteamCmdPath(cmdPath: string): Promise<void> {
+    try {
+      await prismaClient.steamSettings.upsert({
+        where: { id: 1 },
+        update: { cmdPath },
+        create: { cmdPath, username: '', password: '' }
+      })
+      logInfo(`Updated SteamCMD path to: ${cmdPath}`, { service: 'GameUpdateService' })
+    } catch (error) {
+      logError('Failed to update SteamCMD path', error as Error, {
+        service: 'GameUpdateService',
+        cmdPath
+      })
+      throw error
     }
   }
 }

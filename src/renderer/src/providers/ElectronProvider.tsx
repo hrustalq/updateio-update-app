@@ -1,6 +1,5 @@
-import React, { createContext, useCallback, useContext, useMemo, useState, useEffect } from 'react'
+import React, { createContext, useCallback, useContext, useMemo, useEffect } from 'react'
 import { useToast } from '@renderer/components/ui/toast/use-toast'
-import { SteamGuardModal } from '@renderer/components/steam-guard-modal'
 
 type ElectronContextType = typeof window.api
 
@@ -12,7 +11,6 @@ interface ElectronProviderProps {
 
 export const ElectronProvider: React.FC<ElectronProviderProps> = ({ children }) => {
   const { toast } = useToast()
-  const [isSteamGuardModalOpen, setIsSteamGuardModalOpen] = useState(false)
 
   const handleError = useCallback(
     (error: Error | unknown): void => {
@@ -43,32 +41,7 @@ export const ElectronProvider: React.FC<ElectronProviderProps> = ({ children }) 
 
   const value: ElectronContextType = useMemo(() => window.api, [])
 
-  useEffect(() => {
-    const handleSteamGuardRequest = () => {
-      setIsSteamGuardModalOpen(true)
-    }
-
-    window.api.on('request-steam-guard-code', handleSteamGuardRequest)
-
-    return () => {
-      window.api.off('request-steam-guard-code', handleSteamGuardRequest)
-    }
-  }, [])
-
-  const handleSteamGuardSubmit = (code: string) => {
-    window.api.invoke('updates:action', 'loginWithSteamGuard', code)
-  }
-
-  return (
-    <ElectronContext.Provider value={value}>
-      {children}
-      <SteamGuardModal
-        isOpen={isSteamGuardModalOpen}
-        onSubmit={handleSteamGuardSubmit}
-        onClose={() => setIsSteamGuardModalOpen(false)}
-      />
-    </ElectronContext.Provider>
-  )
+  return <ElectronContext.Provider value={value}>{children}</ElectronContext.Provider>
 }
 
 export const useElectron = () => {

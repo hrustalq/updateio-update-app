@@ -83,6 +83,7 @@ export function SteamLogin() {
         isOpen={showSteamGuardModal}
         onClose={() => setShowSteamGuardModal(false)}
         onSubmit={handleSteamGuardSubmit}
+        isLoading={isLoading}
       />
     </div>
   )
