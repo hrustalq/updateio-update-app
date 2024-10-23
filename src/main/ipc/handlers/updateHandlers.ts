@@ -2,6 +2,7 @@ import { IpcMain } from 'electron'
 import { logError } from '../../services/loggerService'
 import { userService } from '@/services/userService'
 import { gameUpdateService } from '@/services/gameUpdateService'
+import { SteamAccountSettingsForm } from '@shared/models'
 
 export function setupUpdateHandlers(ipcMain: IpcMain): void {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -31,7 +32,7 @@ export function setupUpdateHandlers(ipcMain: IpcMain): void {
           return await gameUpdateService.getSteamSettings()
 
         case 'updateSteamSettings':
-          return await gameUpdateService.updateSteamSettings(payload)
+          return await gameUpdateService.updateSteamSettings(payload as SteamAccountSettingsForm)
 
         case 'validateSteamCmd':
           return gameUpdateService.validateSteamCmd(payload)
@@ -47,7 +48,7 @@ export function setupUpdateHandlers(ipcMain: IpcMain): void {
           return await gameUpdateService.loginToSteam(
             payload.username,
             payload.password,
-            payload.cmdPath
+            payload.steamGuardCode
           )
 
         case 'submitSteamGuardCode':

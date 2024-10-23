@@ -4,7 +4,11 @@ import { prismaClient } from './prismaService'
 import { logError, logInfo, logWarn } from './loggerService'
 import { ResponseError } from '../lib/types/error'
 import { connect, Connection, Channel } from 'amqplib'
-import { QueueUpdateRequestPayload, UpdateRequestPayload } from '@shared/models'
+import {
+  QueueUpdateRequestPayload,
+  SteamAccountSettingsForm,
+  UpdateRequestPayload
+} from '@shared/models'
 import path from 'path'
 import fs from 'fs'
 import { spawn } from 'child_process'
@@ -348,10 +352,21 @@ export class GameUpdateService {
   public async loginToSteam(
     username: string,
     password: string,
-    cmdPath: string
+    steamGuardCode?: string
   ): Promise<{ output: string[]; needsSteamGuard: boolean }> {
-    const STEAMCMD_PATH = this.getSteamCmdPath(cmdPath)
-    const command = ['+login', username, password, '+quit']
+    const settings = await this.getSteamSettings()
+    if (!settings || !settings.cmdPath) {
+      throw new Error('SteamCMD path is not set')
+    }
+
+    const STEAMCMD_PATH = this.getSteamCmdPath(settings.cmdPath)
+    const command = ['+login', username, password]
+
+    if (steamGuardCode) {
+      command.push(steamGuardCode)
+    }
+
+    command.push('+quit')
 
     return new Promise((resolve, reject) => {
       const steamcmd =
@@ -367,7 +382,7 @@ export class GameUpdateService {
 
         if (data.toString().includes('Steam Guard code:')) {
           needsSteamGuard = true
-          steamcmd.stdin.cork() // Изменено с pause() на cork()
+          steamcmd.stdin.cork()
           resolve({ output, needsSteamGuard })
         }
       }
@@ -397,7 +412,7 @@ export class GameUpdateService {
       }
 
       this.currentSteamCmdProcess?.stdin?.write(`${code}\n`)
-      this.currentSteamCmdProcess?.stdin?.uncork() // Изменено с resume() на uncork()
+      this.currentSteamCmdProcess?.stdin?.uncork()
 
       let output: string[] = []
       let success = false
@@ -779,11 +794,22 @@ export class GameUpdateService {
     return prismaClient.steamSettings.findFirst()
   }
 
-  public async updateSteamSettings(settings: SteamSettings): Promise<SteamSettings> {
+  public async updateSteamSettings(settings: SteamAccountSettingsForm): Promise<SteamSettings> {
+    const currentSettings = await this.getSteamSettings()
+
     return prismaClient.steamSettings.upsert({
       where: { id: 1 },
-      update: settings,
-      create: settings
+      update: {
+        username: settings.username,
+        password: settings.password,
+        // Сохраняем текущий cmdPath, если он н�� предоставлен в новых настройках
+        cmdPath: currentSettings?.cmdPath || ''
+      },
+      create: {
+        username: settings.username,
+        password: settings.password,
+        cmdPath: currentSettings?.cmdPath || ''
+      }
     })
   }
 

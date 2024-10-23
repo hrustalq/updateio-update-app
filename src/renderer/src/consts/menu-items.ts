@@ -7,8 +7,7 @@ import {
   PanelBottomOpen,
   PlusCircle,
   RefreshCw,
-  Settings,
-  Sliders
+  Settings
 } from 'lucide-react'
 
 export const menuItems = [
@@ -37,6 +36,6 @@ export const menuItems = [
     label: 'Настройки',
     icon: Settings,
     description: 'Управление настройками системы.',
-    subItems: [{ to: '/settings/', label: 'Общие настройки', icon: Sliders }]
+    to: '/settings'
   }
 ]

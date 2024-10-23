@@ -224,112 +224,125 @@ export const BurgerMenu = () => {
       {/* Desktop menu */}
       <nav className="hidden sm:flex lg:flex-1 max-w-full" aria-label="Главное меню">
         <ul className="w-full flex justify-around" role="menubar">
-          {menuItems.map((item) => (
-            <li
-              key={item.label}
-              className="relative"
-              onMouseEnter={() => handleMouseEnter(item.label)}
-              onMouseLeave={handleMouseLeave}
-              role="none"
-            >
-              <button
-                className="text-base font-medium px-4 py-2 hover:bg-accent rounded-md transition-colors flex items-center"
-                onClick={() =>
-                  setOpenDesktopMenu(openDesktopMenu === item.label ? null : item.label)
-                }
-                onKeyDown={(e) => handleKeyDown(e, item.label)}
-                aria-haspopup="true"
-                aria-expanded={openDesktopMenu === item.label}
-                role="menuitem"
+          {menuItems.map((item) =>
+            item.subItems ? (
+              <li
+                key={item.label}
+                className="relative"
+                onMouseEnter={() => handleMouseEnter(item.label)}
+                onMouseLeave={handleMouseLeave}
+                role="none"
               >
-                <item.icon className="mr-2 h-4 w-4" aria-hidden="true" />
-                {item.label}
-                <ChevronDown className="ml-1 h-4 w-4" aria-hidden="true" />
-              </button>
-              <AnimatePresence>
-                {openDesktopMenu === item.label && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    transition={{ duration: 0.15, ease: 'easeOut' }}
-                    className="absolute left-0 w-[500px] mt-2"
-                    style={{ transform: 'translateX(-25%)' }}
-                    role="menu"
-                    aria-label={`Подменю ${item.label}`}
-                  >
-                    <div className="grid gap-3 p-5 bg-popover rounded-md shadow-md lg:grid-cols-[.75fr_1fr] border border-border">
-                      <div className="row-span-3">
-                        <h3
-                          className="font-medium leading-none mb-2 flex items-center"
-                          id={`${item.label}-heading`}
-                        >
-                          <item.icon className="mr-2 h-5 w-5" aria-hidden="true" />
-                          {item.label}
-                        </h3>
-                        <p className="text-sm text-muted-foreground mb-4">{item.description}</p>
-                        {item.quickActions?.map((action, actionIndex) => (
-                          <Button
-                            key={actionIndex}
-                            variant="outline"
-                            className={cn(
-                              'w-full justify-start mb-2',
-                              focusedItemIndex === actionIndex &&
-                                !isMouseInteraction &&
-                                'ring-2 ring-ring ring-offset-2 ring-offset-background'
-                            )}
-                            asChild
+                <button
+                  className="text-base font-medium px-4 py-2 hover:bg-accent rounded-md transition-colors flex items-center"
+                  onClick={() =>
+                    setOpenDesktopMenu(openDesktopMenu === item.label ? null : item.label)
+                  }
+                  onKeyDown={(e) => handleKeyDown(e, item.label)}
+                  aria-haspopup="true"
+                  aria-expanded={openDesktopMenu === item.label}
+                  role="menuitem"
+                >
+                  <item.icon className="mr-2 h-4 w-4" aria-hidden="true" />
+                  {item.label}
+                  <ChevronDown className="ml-1 h-4 w-4" aria-hidden="true" />
+                </button>
+                <AnimatePresence>
+                  {openDesktopMenu === item.label && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      transition={{ duration: 0.15, ease: 'easeOut' }}
+                      className="absolute left-0 w-[500px] mt-2"
+                      style={{ transform: 'translateX(-25%)' }}
+                      role="menu"
+                      aria-label={`Подменю ${item.label}`}
+                    >
+                      <div className="grid gap-3 p-5 bg-popover rounded-md shadow-md lg:grid-cols-[.75fr_1fr] border border-border">
+                        <div className="row-span-3">
+                          <h3
+                            className="font-medium leading-none mb-2 flex items-center"
+                            id={`${item.label}-heading`}
                           >
-                            <Link
-                              to={action.to}
-                              role="menuitem"
-                              ref={(el) => (submenuItemsRef.current[actionIndex] = el)}
-                              tabIndex={focusedItemIndex === actionIndex ? 0 : -1}
-                              onKeyDown={(e) => handleKeyDown(e, item.label)}
+                            <item.icon className="mr-2 h-5 w-5" aria-hidden="true" />
+                            {item.label}
+                          </h3>
+                          <p className="text-sm text-muted-foreground mb-4">{item.description}</p>
+                          {item.quickActions?.map((action, actionIndex) => (
+                            <Button
+                              key={actionIndex}
+                              variant="outline"
+                              className={cn(
+                                'w-full justify-start mb-2',
+                                focusedItemIndex === actionIndex &&
+                                  !isMouseInteraction &&
+                                  'ring-2 ring-ring ring-offset-2 ring-offset-background'
+                              )}
+                              asChild
                             >
-                              <action.icon className="mr-2 h-4 w-4" aria-hidden="true" />
-                              {action.label}
-                            </Link>
-                          </Button>
-                        ))}
+                              <Link
+                                to={action.to}
+                                role="menuitem"
+                                ref={(el) => (submenuItemsRef.current[actionIndex] = el)}
+                                tabIndex={focusedItemIndex === actionIndex ? 0 : -1}
+                                onKeyDown={(e) => handleKeyDown(e, item.label)}
+                              >
+                                <action.icon className="mr-2 h-4 w-4" aria-hidden="true" />
+                                {action.label}
+                              </Link>
+                            </Button>
+                          ))}
+                        </div>
+                        <ul
+                          className="col-span-1"
+                          role="menu"
+                          aria-labelledby={`${item.label}-heading`}
+                        >
+                          {item.subItems?.map((subItem, subIndex) => (
+                            <ListItem
+                              key={subItem.label}
+                              title={subItem.label}
+                              href={subItem.to}
+                              icon={subItem.icon}
+                              role="menuitem"
+                              ref={(el) =>
+                                (submenuItemsRef.current[
+                                  (item.quickActions?.length || 0) + subIndex
+                                ] = el)
+                              }
+                              tabIndex={
+                                focusedItemIndex === (item.quickActions?.length || 0) + subIndex
+                                  ? 0
+                                  : -1
+                              }
+                              onKeyDown={(e) => handleKeyDown(e, item.label)}
+                              className={cn(
+                                focusedItemIndex === (item.quickActions?.length || 0) + subIndex &&
+                                  !isMouseInteraction &&
+                                  'ring-2 ring-ring ring-offset-2 ring-offset-background'
+                              )}
+                            />
+                          ))}
+                        </ul>
                       </div>
-                      <ul
-                        className="col-span-1"
-                        role="menu"
-                        aria-labelledby={`${item.label}-heading`}
-                      >
-                        {item.subItems?.map((subItem, subIndex) => (
-                          <ListItem
-                            key={subItem.label}
-                            title={subItem.label}
-                            href={subItem.to}
-                            icon={subItem.icon}
-                            role="menuitem"
-                            ref={(el) =>
-                              (submenuItemsRef.current[
-                                (item.quickActions?.length || 0) + subIndex
-                              ] = el)
-                            }
-                            tabIndex={
-                              focusedItemIndex === (item.quickActions?.length || 0) + subIndex
-                                ? 0
-                                : -1
-                            }
-                            onKeyDown={(e) => handleKeyDown(e, item.label)}
-                            className={cn(
-                              focusedItemIndex === (item.quickActions?.length || 0) + subIndex &&
-                                !isMouseInteraction &&
-                                'ring-2 ring-ring ring-offset-2 ring-offset-background'
-                            )}
-                          />
-                        ))}
-                      </ul>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </li>
-          ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </li>
+            ) : (
+              <li key={item.label} className="rounded-md overflow-hidden">
+                <Link
+                  to={item.to}
+                  className="px-4 py-2 hover:bg-accent flex items-center"
+                  role="menuitem"
+                >
+                  {item.icon && <item.icon className="mr-2 h-4 w-4" aria-hidden="true" />}
+                  <span>{item.label}</span>
+                </Link>
+              </li>
+            )
+          )}
         </ul>
       </nav>
     </div>

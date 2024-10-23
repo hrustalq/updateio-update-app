@@ -128,3 +128,9 @@ export interface SteamGuardResult {
   output: string[]
   success: boolean
 }
+
+export interface SteamAccountSettingsForm {
+  username: string
+  password: string
+  steamGuardCode?: string // Оставляем это поле, но оно не будет сохраняться
+}
