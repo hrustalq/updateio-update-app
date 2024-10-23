@@ -45,10 +45,23 @@ export function setupUpdateHandlers(ipcMain: IpcMain): void {
           return await gameUpdateService.checkSteamLoginStatus()
 
         case 'loginToSteam':
-          return await gameUpdateService.loginToSteam(payload.username, payload.password)
+          await gameUpdateService.loginToSteam(payload.username, payload.password)
+          return { needsSteamGuard: true }
 
-        case 'submitSteamGuardCode':
-          return await gameUpdateService.submitSteamGuardCode(payload.code)
+        case 'submitSteamGuardCode': {
+          await gameUpdateService.submitSteamGuardCode(payload.code)
+          const pendingSettings = {
+            username: gameUpdateService.pendingUsername,
+            password: gameUpdateService.pendingPassword
+          }
+          if (pendingSettings.username && pendingSettings.password) {
+            return await gameUpdateService.updateSteamSettings({
+              username: pendingSettings.username,
+              password: pendingSettings.password
+            })
+          }
+          throw new Error('No pending settings to update')
+        }
 
         case 'loginToSteamNonConcurrent':
           return await gameUpdateService.loginToSteamNonConcurrent()

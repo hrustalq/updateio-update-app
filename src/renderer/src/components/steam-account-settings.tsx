@@ -35,24 +35,12 @@ export function SteamAccountSettings() {
     mutationFn: async (data: SteamAccountSettingsForm) => {
       setIsLoading(true)
       try {
-        console.log('Attempting to login to Steam...')
-        const result = await invoke<{ needsSteamGuard: boolean }>(
-          'updates:action',
-          'loginToSteam',
-          {
-            username: data.username,
-            password: data.password
-          }
-        )
-        console.log('Login result:', result)
-        if (result.needsSteamGuard) {
-          console.log('Steam Guard required, opening modal...')
-          setIsSteamGuardModalOpen(true)
-        } else {
-          console.log('No Steam Guard required, updating settings...')
-          await invoke<void>('updates:action', 'updateSteamSettings', data)
-        }
-        return result
+        await invoke<void>('updates:action', 'loginToSteam', {
+          username: data.username,
+          password: data.password
+        })
+        setIsSteamGuardModalOpen(true)
+        return { needsSteamGuard: true }
       } catch (error) {
         console.error('Error during Steam login:', error)
         throw error
@@ -60,17 +48,11 @@ export function SteamAccountSettings() {
         setIsLoading(false)
       }
     },
-    onSuccess: (data) => {
-      if (!data.needsSteamGuard) {
-        toast({ title: 'Успех', description: 'Настройки Steam успешно обновлены' })
-        queryClient.invalidateQueries({ queryKey: ['steamSettings'] })
-      }
-    },
     onError: (error) => {
       console.error(error)
       toast({
         title: 'Ошибка',
-        description: error instanceof Error ? error.message : 'Не удалось обновить настройки Steam',
+        description: error instanceof Error ? error.message : 'Не удалось войти в Steam',
         variant: 'destructive'
       })
     }
