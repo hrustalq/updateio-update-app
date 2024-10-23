@@ -368,7 +368,7 @@ export class GameUpdateService {
       this.pendingPassword = password
 
       const result = await this.executeSteamCommandWithSteamGuard(STEAMCMD_PATH, command)
-      
+
       if (!result.needsSteamGuard) {
         // Если Steam Guard не требуется, сразу обновляем настройки
         await this.updateSteamSettings({ username, password })
@@ -437,8 +437,8 @@ export class GameUpdateService {
         }
       }
 
-      this.currentSteamCmdProcess.stdout.on('data', handleOutput)
-      this.currentSteamCmdProcess.stderr.on('data', handleOutput)
+      this.currentSteamCmdProcess?.stdout?.on('data', handleOutput)
+      this.currentSteamCmdProcess?.stderr?.on('data', handleOutput)
 
       this.currentSteamCmdProcess.on('close', (code) => {
         if (code !== 0 && !needsSteamGuard) {
@@ -491,14 +491,19 @@ export class GameUpdateService {
   }
 
   public async checkSteamLoginStatus(): Promise<boolean> {
-    const steamSettings = await this.getSteamSettings()
+    const steamSettings = await this.getSteamSettings().then((settings) => {
+      if (!settings?.username || !settings?.password) {
+        return null
+      }
+      return settings
+    })
     if (!steamSettings) {
       return false
     }
 
     const STEAMCMD_PATH = this.getSteamCmdPath(steamSettings.cmdPath)
 
-    const command = ['+login', '+quit']
+    const command = ['+login', steamSettings.username, steamSettings.password, '+quit']
 
     try {
       await this.executeSteamCommandConcurrently(STEAMCMD_PATH, command)
