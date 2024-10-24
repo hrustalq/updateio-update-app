@@ -1,6 +1,7 @@
 import { IpcMain } from 'electron'
 import { logError } from '../../services/loggerService'
 import { userService } from '@/services/userService'
+import { steamAccountService } from '@/services/steamAccount.service'
 import { gameUpdateService } from '@/services/gameUpdateService'
 import { SteamAccountSettingsForm } from '@shared/models'
 
@@ -45,23 +46,10 @@ export function setupUpdateHandlers(ipcMain: IpcMain): void {
           return await gameUpdateService.checkSteamLoginStatus()
 
         case 'loginToSteam':
-          await gameUpdateService.loginToSteam(payload.username, payload.password)
-          return { needsSteamGuard: true }
+          return await steamAccountService.setupAccount(payload.username, payload.password)
 
-        case 'submitSteamGuardCode': {
-          await gameUpdateService.submitSteamGuardCode(payload.code)
-          const pendingSettings = {
-            username: gameUpdateService.pendingUsername,
-            password: gameUpdateService.pendingPassword
-          }
-          if (pendingSettings.username && pendingSettings.password) {
-            return await gameUpdateService.updateSteamSettings({
-              username: pendingSettings.username,
-              password: pendingSettings.password
-            })
-          }
-          throw new Error('No pending settings to update')
-        }
+        case 'submitSteamGuardCode':
+          return await gameUpdateService.submitSteamGuardCode(payload)
 
         case 'loginToSteamNonConcurrent':
           return await gameUpdateService.loginToSteamNonConcurrent()

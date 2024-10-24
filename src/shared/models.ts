@@ -132,5 +132,15 @@ export interface SteamGuardResult {
 export interface SteamAccountSettingsForm {
   username: string
   password: string
-  steamGuardCode?: string // Оставляем это поле, но оно не будет сохраняться
+}
+
+export interface HandleSteamCmdOutputOptions {
+  service?: string
+  payload?: unknown
+}
+
+export interface HandleProcessCmdOutputTrigger {
+  search: string
+  action: (...args: unknown[]) => unknown
+  ctx?: unknown
 }

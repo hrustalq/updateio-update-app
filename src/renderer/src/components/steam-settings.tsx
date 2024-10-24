@@ -7,8 +7,7 @@ import { Label } from '@renderer/components/ui/label'
 import { useToast } from '@renderer/components/ui/toast/use-toast'
 import { Skeleton } from '@renderer/components/ui/skeleton'
 import { useElectron } from '@renderer/providers/ElectronProvider'
-import { SteamGuardModal } from './steam-guard-modal'
-import { LoginResult, SteamGuardResult } from '@shared/models'
+import { LoginResult } from '@shared/models'
 interface SteamSettingsForm {
   username: string
   password: string
@@ -19,7 +18,6 @@ export function SteamSettings() {
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const [isValidating, setIsValidating] = useState(false)
-  const [showSteamGuardModal, setShowSteamGuardModal] = useState(false)
   const [loginOutput, setLoginOutput] = useState<string[]>([])
 
   const { invoke } = useElectron()
@@ -55,19 +53,14 @@ export function SteamSettings() {
         if (!isValid) {
           throw new Error('Указанный путь к SteamCMD недействителен')
         }
-        const loginResult = await invoke<LoginResult>('updates:action', 'loginToSteam', {
-          username: data.username,
-          password: data.password,
-          cmdPath: data.cmdPath
-        })
+        await invoke<void>('updates:action', 'updateSteamSettings', data)
+        const loginResult = await invoke<LoginResult>('updates:action', 'loginToSteamNonConcurrent')
         setLoginOutput(loginResult.output)
         if (loginResult.needsSteamGuard) {
-          setShowSteamGuardModal(true)
           return new Promise<boolean>((resolve) => {
             window.steamGuardResolver = resolve
           })
         }
-        await invoke<void>('updates:action', 'updateSteamSettings', data)
         return true
       } finally {
         setIsValidating(false)
@@ -86,32 +79,6 @@ export function SteamSettings() {
       })
     }
   })
-
-  const handleSteamGuardSubmit = async (code: string) => {
-    try {
-      const result = await invoke<SteamGuardResult>('updates:action', 'submitSteamGuardCode', code)
-      setLoginOutput((prev) => [...prev, ...result.output])
-      if (result.success) {
-        window.steamGuardResolver(true)
-        setShowSteamGuardModal(false)
-        await invoke<void>('updates:action', 'updateSteamSettings', {
-          username: settings?.username,
-          password: settings?.password,
-          cmdPath: settings?.cmdPath
-        })
-      } else {
-        throw new Error('Неверный код Steam Guard')
-      }
-    } catch (error) {
-      console.error(error)
-      toast({
-        title: 'Ошибка',
-        description: error instanceof Error ? error.message : 'Не удалось войти в Steam',
-        variant: 'destructive'
-      })
-      window.steamGuardResolver(false)
-    }
-  }
 
   const onSubmit = (data: SteamSettingsForm) => {
     updateMutation.mutate(data)
@@ -175,12 +142,6 @@ export function SteamSettings() {
           ))}
         </div>
       )}
-      <SteamGuardModal
-        isLoading={updateMutation.isPending}
-        isOpen={showSteamGuardModal}
-        onClose={() => setShowSteamGuardModal(false)}
-        onSubmit={handleSteamGuardSubmit}
-      />
     </>
   )
 }
